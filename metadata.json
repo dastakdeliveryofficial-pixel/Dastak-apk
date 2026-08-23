@@ -1,0 +1,6 @@
+{
+  "name": "Dastak Delivery",
+  "description": "All-in-One Food Delivery Web App for Matli, Pakistan with Customer, Vendor, Rider, and Admin dashboards, real-time tracking, and WhatsApp billing.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
