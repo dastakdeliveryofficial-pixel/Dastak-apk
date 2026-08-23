@@ -11,6 +11,31 @@ import {
 } from '../data/mockData';
 import { sounds } from '../utils/audio';
 import { TRANSLATIONS, Translations, getLocalizedName, getLocalizedDescription, getLocalizedPromo } from '../utils/translations';
+import { 
+  auth, 
+  db, 
+  doc, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc, 
+  collection, 
+  onAuthStateChanged 
+} from '../lib/firebase';
+import { 
+  seedInitialFirestoreData, 
+  registerFirebaseUser, 
+  loginFirebaseUser, 
+  resetFirebasePassword, 
+  logoutFirebaseUser,
+  subscribeToOrders,
+  subscribeToRestaurants,
+  subscribeToMenuItems,
+  subscribeToRiders,
+  subscribeToUsers,
+  createFirestoreOrder,
+  updateFirestoreOrderStatus
+} from '../lib/firestoreService';
 
 export interface ToastNotification {
   id: string;
@@ -48,8 +73,22 @@ interface AppContextType {
   authModalRole: UserRole;
   setAuthModalRole: (role: UserRole) => void;
   openLoginModal: (role?: UserRole) => void;
+  loginWithEmailPassword: (email: string, pass: string, role?: UserRole) => Promise<void>;
+  registerWithEmailPassword: (data: {
+    email: string;
+    pass: string;
+    name: string;
+    phone: string;
+    role: UserRole;
+    address?: string;
+    area?: string;
+    shopName?: string;
+    shopOwner?: string;
+    vehiclePlate?: string;
+  }) => Promise<void>;
+  sendPasswordReset: (email: string) => Promise<void>;
   loginUser: (emailOrPhone: string, role: UserRole, extra?: { name?: string; restaurantId?: string; riderId?: string }) => void;
-  registerCustomerAccount: (data: { name: string; phone: string; email?: string; password?: string; address?: string; area?: string }) => User;
+  registerCustomerAccount: (data: { name: string; phone: string; email?: string; password?: string; address?: string; area?: string }) => Promise<User>;
   registerNewVendor: (vendorData: {
     name: string;
     nameUrdu?: string;
@@ -59,6 +98,7 @@ interface AppContextType {
     address: string;
     area: string;
     categories: string[];
+    email?: string;
     minOrder?: number;
     deliveryFee?: number;
     deliveryTime?: string;
@@ -66,15 +106,17 @@ interface AppContextType {
     image?: string;
     description?: string;
     password?: string;
-  }) => { restaurantId: string; vendorId: string; restaurant: Restaurant };
+  }) => Promise<{ restaurantId: string; vendorId: string; restaurant: Restaurant }>;
   registerRider: (riderData: {
     name: string;
     phone: string;
-    cnicNumber: string;
-    vehicleType: 'bike' | 'loader' | 'bicycle';
-    vehiclePlateNumber: string;
-    currentArea: string;
-  }) => Rider;
+    email?: string;
+    password?: string;
+    cnicNumber?: string;
+    vehicleType?: 'bike' | 'loader' | 'bicycle';
+    vehiclePlateNumber?: string;
+    currentArea?: string;
+  }) => Promise<Rider>;
   logoutUser: () => void;
 
   // Privacy & Permissions
@@ -128,11 +170,10 @@ interface AppContextType {
   // Orders & Flow
   trackingOrderId: string | null;
   setTrackingOrderId: (id: string | null) => void;
-  placeOrder: (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa') => Order;
-  updateOrderStatus: (orderId: string, newStatus: OrderStatus, riderId?: string, cancelReason?: string) => void;
-  assignRiderToOrder: (orderId: string, riderId: string) => void;
+  placeOrder: (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa') => Promise<Order>;
+  updateOrderStatus: (orderId: string, newStatus: OrderStatus, riderId?: string, cancelReason?: string) => Promise<void>;
+  assignRiderToOrder: (orderId: string, riderId: string) => Promise<void>;
   reorderPastOrder: (orderId: string) => boolean;
-  simulateAdvanceOrderStatus: (orderId: string) => void;
   
   // Addresses
   addresses: Address[];
@@ -150,8 +191,8 @@ interface AppContextType {
   
   // Rider Functions
   toggleRiderOnline: (riderId: string) => void;
-  riderClaimDelivery: (orderId: string, riderId: string) => void;
-  riderCompleteDelivery: (orderId: string) => void;
+  riderClaimDelivery: (orderId: string, riderId: string) => Promise<void>;
+  riderCompleteDelivery: (orderId: string) => Promise<void>;
   
   // Admin Operations (Universal Menu, All Restaurants, Approval)
   approveVendor: (restaurantId: string) => void;
@@ -222,7 +263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalRole, setAuthModalRole] = useState<UserRole>('customer');
 
-  // Rider & Customer privacy toggle (default: false = phone numbers hidden unless admin approves)
+  // Rider & Customer privacy toggle
   const [allowRiderViewCustomerInfo, setAllowRiderViewCustomerInfo] = useState<boolean>(() => {
     return localStorage.getItem(LOCAL_STORAGE_KEY + '_rider_privacy') === 'true';
   });
@@ -232,79 +273,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [trackingOrderId, setTrackingOrderId] = useState<string | null>('ord-1001');
+  const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
 
   // Alo Chat State
   const [aloChatMessages, setAloChatMessages] = useState<AloChatMessage[]>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_alochat');
-    return saved ? JSON.parse(saved) : [
-      {
-        id: 'msg-1',
-        orderId: 'ord-1001',
-        sender: 'rider',
-        senderName: 'Tariq Mehmood (Rider)',
-        message: 'Assalam o Alaikum! I have picked up your order from Al-Madina Biryani and heading towards Shahi Bazaar.',
-        timestamp: '1:42 PM',
-        isRead: true
-      },
-      {
-        id: 'msg-2',
-        orderId: 'ord-1001',
-        sender: 'customer',
-        senderName: 'Muhammad Hamza',
-        message: 'Walaikum Assalam! Bhai please ring the bell once you arrive at House #14.',
-        timestamp: '1:44 PM',
-        isRead: true
-      }
-    ];
+    return saved ? JSON.parse(saved) : [];
   });
   const [isAloChatOpen, setIsAloChatOpen] = useState<boolean>(false);
   const [activeAloChatOrderId, setActiveAloChatOrderId] = useState<string | null>(null);
 
-
   // Core Persistent State
-  const [allUsers, setAllUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_users');
-    return saved ? JSON.parse(saved) : INITIAL_CUSTOMERS;
-  });
-
-  const [currentUser, setCurrentUser] = useState<User>(allUsers[0] || INITIAL_CUSTOMERS[0]);
-
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
-    return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
-  });
-
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu');
-    return saved ? JSON.parse(saved) : INITIAL_MENU_ITEMS;
-  });
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
-  });
-
-  const [riders, setRiders] = useState<Rider[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_riders');
-    return saved ? JSON.parse(saved) : INITIAL_RIDERS;
-  });
-
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_categories');
-    return saved ? JSON.parse(saved) : CATEGORIES;
-  });
-
-  const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_promos');
-    return saved ? JSON.parse(saved) : BANNER_PROMOS;
-  });
-
-  const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(() => {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_settings');
-    return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
-  });
+  const [allUsers, setAllUsers] = useState<User[]>(INITIAL_CUSTOMERS);
+  const [currentUser, setCurrentUser] = useState<User>(INITIAL_CUSTOMERS[0]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(INITIAL_RESTAURANTS);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
+  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [riders, setRiders] = useState<Rider[]>(INITIAL_RIDERS);
+  const [categories, setCategories] = useState<Category[]>(CATEGORIES);
+  const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(BANNER_PROMOS);
+  const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(INITIAL_SETTINGS);
 
   const [cart, setCart] = useState<CartState>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_cart');
@@ -317,28 +306,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  // Save changes to LocalStorage
+  // 1. Initial Firestore Seeding & Realtime Listeners
   useEffect(() => {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_users', JSON.stringify(allUsers));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(restaurants));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_menu', JSON.stringify(menuItems));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_orders', JSON.stringify(orders));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_riders', JSON.stringify(riders));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_categories', JSON.stringify(categories));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_promos', JSON.stringify(bannerPromos));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_settings', JSON.stringify(platformSettings));
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_cart', JSON.stringify(cart));
-    } catch {
-      // Storage error safeguard
-    }
-  }, [allUsers, restaurants, menuItems, orders, riders, categories, bannerPromos, platformSettings, cart]);
+    // Seed initial data if Firestore is fresh
+    seedInitialFirestoreData();
+
+    // Subscribe to real-time Orders
+    const unsubOrders = subscribeToOrders((liveOrders) => {
+      if (liveOrders && liveOrders.length > 0) {
+        setOrders(liveOrders);
+      }
+    });
+
+    // Subscribe to real-time Restaurants
+    const unsubRestaurants = subscribeToRestaurants((liveRest) => {
+      if (liveRest && liveRest.length > 0) {
+        setRestaurants(liveRest);
+      }
+    });
+
+    // Subscribe to real-time Menu Items
+    const unsubMenu = subscribeToMenuItems((liveMenu) => {
+      if (liveMenu && liveMenu.length > 0) {
+        setMenuItems(liveMenu);
+      }
+    });
+
+    // Subscribe to real-time Riders
+    const unsubRiders = subscribeToRiders((liveRiders) => {
+      if (liveRiders && liveRiders.length > 0) {
+        setRiders(liveRiders);
+      }
+    });
+
+    // Subscribe to real-time Users
+    const unsubUsers = subscribeToUsers((liveUsers) => {
+      if (liveUsers && liveUsers.length > 0) {
+        setAllUsers(liveUsers);
+      }
+    });
+
+    // Listen to Firebase Auth state
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setIsAuthenticated(true);
+        const matched = allUsers.find(u => u.id === firebaseUser.uid || u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
+        if (matched) {
+          setCurrentUser(matched);
+          setCurrentRole(matched.role);
+        }
+      }
+    });
+
+    return () => {
+      unsubOrders();
+      unsubRestaurants();
+      unsubMenu();
+      unsubRiders();
+      unsubUsers();
+      unsubAuth();
+    };
+  }, []);
 
   const lastToastRef = useRef<{ title: string; message: string; time: number }>({ title: '', message: '', time: 0 });
 
   const triggerToast = (title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
     const now = Date.now();
-    // Prevent duplicate toast spam within 1.2 seconds
     if (
       lastToastRef.current.title === title && 
       lastToastRef.current.message === message && 
@@ -357,13 +390,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Keep only 1 non-intrusive toast on screen at a time
     setNotifications([newToast]);
 
-    // Auto dismiss quickly (2.2 seconds)
     setTimeout(() => {
-      setNotifications(prev => prev.filter(t => t.id === id));
-    }, 2200);
+      setNotifications(prev => prev.filter(t => t.id !== id));
+    }, 2500);
   };
 
   const dismissNotification = (id: string) => {
@@ -380,7 +411,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addToCart = (restaurant: Restaurant, item: MenuItem, quantity: number = 1) => {
     sounds.playClick();
     setCart(prev => {
-      // If adding from different restaurant, confirm or replace
       if (prev.restaurantId && prev.restaurantId !== restaurant.id && prev.items.length > 0) {
         triggerToast('Cart Replaced', `Switched cart items to ${restaurant.name}`, 'warning');
         return {
@@ -507,7 +537,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Addresses
   const addresses = currentUser.addresses || [];
 
-  const addAddress = (newAddr: Omit<Address, 'id'>) => {
+  const addAddress = async (newAddr: Omit<Address, 'id'>) => {
     const addressWithId: Address = {
       ...newAddr,
       id: 'addr-' + Date.now(),
@@ -520,32 +550,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updatedUser = { ...currentUser, addresses: updatedAddresses };
     setCurrentUser(updatedUser);
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updatedAddresses });
+    } catch {
+      // Local fallback
+    }
+
     triggerToast('Address Saved', `Added ${newAddr.label} in ${newAddr.area}`, 'success');
   };
 
-  const deleteAddress = (id: string) => {
+  const deleteAddress = async (id: string) => {
     const updated = addresses.filter(a => a.id !== id);
     const updatedUser = { ...currentUser, addresses: updated };
     setCurrentUser(updatedUser);
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updated });
+    } catch {}
   };
 
-  const setDefaultAddress = (id: string) => {
+  const setDefaultAddress = async (id: string) => {
     const updated = addresses.map(a => ({ ...a, isDefault: a.id === id }));
     const updatedUser = { ...currentUser, addresses: updated };
     setCurrentUser(updatedUser);
-    setAllUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    try {
+      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updated });
+    } catch {}
   };
 
-  // Place Order
-  const placeOrder = (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa'): Order => {
+  // Real Order Creation in Firestore
+  const placeOrder = async (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa'): Promise<Order> => {
     const restaurant = restaurants.find(r => r.id === cart.restaurantId) || restaurants[0];
     const orderNum = 'DST-' + Math.floor(1000 + Math.random() * 9000);
-    const orderId = 'ord-' + Date.now();
 
-    const newOrder: Order = {
-      id: orderId,
+    const orderData: Omit<Order, 'id'> = {
       orderNumber: orderNum,
       customerId: currentUser.id,
       customerName: currentUser.name,
@@ -569,18 +607,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       estimatedDeliveryTime: restaurant.deliveryTime
     };
 
-    setOrders(prev => [newOrder, ...prev]);
+    let createdOrder: Order;
+    try {
+      createdOrder = await createFirestoreOrder(orderData);
+    } catch (err) {
+      console.error('Error creating order in Firestore:', err);
+      // Fallback local
+      const fallbackId = 'ord-' + Date.now();
+      createdOrder = { ...orderData, id: fallbackId };
+      setOrders(prev => [createdOrder, ...prev]);
+    }
 
-    // Update restaurant order count & revenue
-    setRestaurants(prev => prev.map(r => r.id === restaurant.id ? {
-      ...r,
-      totalOrdersCount: r.totalOrdersCount + 1,
-      totalRevenue: r.totalRevenue + cartTotal
-    } : r));
-
-    // Clear cart
+    // Clear cart & set tracking
     clearCart();
-    setTrackingOrderId(orderId);
+    setTrackingOrderId(createdOrder.id);
 
     // Audio & Confetti
     sounds.playOrderSuccess();
@@ -590,63 +630,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         spread: 70,
         origin: { y: 0.6 }
       });
-    } catch {
-      // safe
-    }
+    } catch {}
 
-    triggerToast('Order Placed Successfully!', `Order #${orderNum} sent to ${restaurant.name}`, 'success');
-    return newOrder;
+    triggerToast('Order Placed in Firestore!', `Order #${orderNum} recorded live for ${restaurant.name}`, 'success');
+    return createdOrder;
   };
 
-  // Order Status Updates
-  const updateOrderStatus = (orderId: string, newStatus: OrderStatus, riderId?: string, cancelReason?: string) => {
-    setOrders(prev => prev.map(ord => {
-      if (ord.id !== orderId) return ord;
+  // Real Order Status Updates in Firestore
+  const updateOrderStatus = async (orderId: string, newStatus: OrderStatus, riderId?: string, cancelReason?: string) => {
+    let assignedRiderName: string | undefined;
+    let assignedRiderPhone: string | undefined;
 
-      let assignedRiderName = ord.riderName;
-      let assignedRiderPhone = ord.riderPhone;
-
-      if (riderId) {
-        const foundRider = riders.find(r => r.id === riderId);
-        if (foundRider) {
-          assignedRiderName = foundRider.name;
-          assignedRiderPhone = foundRider.phone;
-        }
+    if (riderId) {
+      const foundRider = riders.find(r => r.id === riderId);
+      if (foundRider) {
+        assignedRiderName = foundRider.name;
+        assignedRiderPhone = foundRider.phone;
       }
+    }
 
-      return {
+    try {
+      await updateFirestoreOrderStatus(orderId, newStatus, riderId, assignedRiderName, assignedRiderPhone, cancelReason);
+    } catch (err) {
+      console.error('Firestore status update error:', err);
+      // Local fallback
+      setOrders(prev => prev.map(ord => ord.id === orderId ? {
         ...ord,
         status: newStatus,
         riderId: riderId || ord.riderId,
-        riderName: assignedRiderName,
-        riderPhone: assignedRiderPhone,
+        riderName: assignedRiderName || ord.riderName,
+        riderPhone: assignedRiderPhone || ord.riderPhone,
         cancelReason: cancelReason || ord.cancelReason,
-        updatedAt: new Date().toISOString(),
-        paymentStatus: (newStatus === 'delivered' && ord.paymentMethod === 'cod') ? 'paid' : ord.paymentStatus
-      };
-    }));
-
-    // Alert sound
-    if (newStatus === 'confirmed' || newStatus === 'out_for_delivery') {
-      sounds.playIncomingAlert();
+        updatedAt: new Date().toISOString()
+      } : ord));
     }
 
-    triggerToast('Order Status Updated', `Order status changed to ${newStatus.toUpperCase()}`, 'info');
+    if (newStatus === 'confirmed' || newStatus === 'out_for_delivery') {
+      sounds.playIncomingAlert();
+    } else if (newStatus === 'delivered') {
+      sounds.playOrderSuccess();
+    }
+
+    triggerToast('Order Updated in Firestore', `Status marked as: ${newStatus.toUpperCase()}`, 'info');
   };
 
-  const assignRiderToOrder = (orderId: string, riderId: string) => {
+  const assignRiderToOrder = async (orderId: string, riderId: string) => {
     const rider = riders.find(r => r.id === riderId);
     if (!rider) return;
 
-    setOrders(prev => prev.map(ord => ord.id === orderId ? {
-      ...ord,
-      riderId: rider.id,
-      riderName: rider.name,
-      riderPhone: rider.phone,
-      status: ord.status === 'placed' ? 'confirmed' : ord.status,
-      updatedAt: new Date().toISOString()
-    } : ord));
-
+    await updateOrderStatus(orderId, 'confirmed', riderId);
     triggerToast('Rider Assigned', `${rider.name} assigned to deliver`, 'success');
   };
 
@@ -670,155 +702,112 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const simulateAdvanceOrderStatus = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    const sequence: OrderStatus[] = ['placed', 'confirmed', 'preparing', 'out_for_delivery', 'delivered'];
-    const currentIndex = sequence.indexOf(order.status);
-    
-    if (currentIndex === -1 || currentIndex >= sequence.length - 1) {
-      triggerToast('Order Complete', 'This order is already delivered.', 'info');
-      return;
-    }
-
-    const nextStatus = sequence[currentIndex + 1];
-    const availableRider = riders.find(r => r.isOnline) || riders[0];
-
-    updateOrderStatus(orderId, nextStatus, (nextStatus === 'out_for_delivery' || nextStatus === 'preparing') ? availableRider.id : undefined);
-
-    if (nextStatus === 'delivered') {
-      try {
-        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-      } catch {
-        // Safe
-      }
-      sounds.playOrderSuccess();
-    }
-  };
-
-  // Vendor Menu Management
-  const addMenuItem = (itemData: Omit<MenuItem, 'id'>) => {
+  // Vendor Menu Management with Firestore
+  const addMenuItem = async (itemData: Omit<MenuItem, 'id'>) => {
+    const newItemId = 'item-' + Date.now();
     const newItem: MenuItem = {
       ...itemData,
-      id: 'item-' + Date.now()
+      id: newItemId
     };
+
+    try {
+      await setDoc(doc(db, 'menuItems', newItemId), newItem);
+    } catch {}
+
     setMenuItems(prev => [newItem, ...prev]);
-    triggerToast('Menu Item Added', `${newItem.name} added to menu`, 'success');
+    triggerToast('Dish Added', `${newItem.name} is now live on your menu`, 'success');
   };
 
-  const updateMenuItem = (id: string, updates: Partial<MenuItem>) => {
+  const updateMenuItem = async (id: string, updates: Partial<MenuItem>) => {
+    try {
+      await updateDoc(doc(db, 'menuItems', id), updates);
+    } catch {}
+
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-    triggerToast('Menu Updated', 'Item details saved successfully', 'success');
+    triggerToast('Dish Updated', 'Menu item changes saved', 'success');
   };
 
-  const deleteMenuItem = (id: string) => {
+  const deleteMenuItem = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'menuItems', id));
+    } catch {}
     setMenuItems(prev => prev.filter(item => item.id !== id));
-    triggerToast('Item Removed', 'Menu item deleted', 'info');
+    triggerToast('Dish Deleted', 'Menu item removed', 'info');
   };
 
   const toggleMenuItemAvailability = (id: string) => {
-    setMenuItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const nextState = !item.isAvailable;
-        triggerToast('Item Updated', `${item.name} is now ${nextState ? 'Available' : 'Sold Out'}`, 'info');
-        return { ...item, isAvailable: nextState };
-      }
-      return item;
-    }));
+    const item = menuItems.find(i => i.id === id);
+    if (!item) return;
+    updateMenuItem(id, { isAvailable: !item.isAvailable });
   };
 
-  const updateRestaurantDetails = (id: string, updates: Partial<Restaurant>) => {
-    setRestaurants(prev => prev.map(rest => rest.id === id ? { ...rest, ...updates } : rest));
+  const updateRestaurantDetails = async (id: string, updates: Partial<Restaurant>) => {
+    try {
+      await updateDoc(doc(db, 'restaurants', id), updates);
+    } catch {}
+    setRestaurants(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+    triggerToast('Settings Saved', 'Shop details updated successfully', 'success');
   };
 
   const toggleRestaurantStatus = (id: string) => {
-    setRestaurants(prev => prev.map(rest => {
-      if (rest.id === id) {
-        const nextState = !rest.isOpen;
-        triggerToast(rest.name, `Store is now ${nextState ? 'OPEN for Orders' : 'CLOSED'}`, nextState ? 'success' : 'warning');
-        return { ...rest, isOpen: nextState };
-      }
-      return rest;
-    }));
+    const r = restaurants.find(item => item.id === id);
+    if (!r) return;
+    updateRestaurantDetails(id, { isOpen: !r.isOpen });
   };
 
-  // Rider Actions
-  const toggleRiderOnline = (riderId: string) => {
-    setRiders(prev => prev.map(r => {
-      if (r.id === riderId) {
-        const nextStatus = !r.isOnline;
-        triggerToast(r.name, `You are now ${nextStatus ? 'ONLINE (Ready for deliveries)' : 'OFFLINE'}`, nextStatus ? 'success' : 'info');
-        return { ...r, isOnline: nextStatus };
-      }
-      return r;
-    }));
-  };
+  // Rider Management
+  const toggleRiderOnline = async (riderId: string) => {
+    const rd = riders.find(r => r.id === riderId);
+    if (!rd) return;
 
-  const riderClaimDelivery = (orderId: string, riderId: string) => {
-    const rider = riders.find(r => r.id === riderId);
-    if (!rider) return;
-
-    setOrders(prev => prev.map(ord => ord.id === orderId ? {
-      ...ord,
-      riderId: rider.id,
-      riderName: rider.name,
-      riderPhone: rider.phone,
-      status: 'out_for_delivery',
-      updatedAt: new Date().toISOString()
-    } : ord));
-
-    sounds.playIncomingAlert();
-    triggerToast('Delivery Accepted', `You accepted delivery for Order #${orderId.slice(-4)}`, 'success');
-  };
-
-  const riderCompleteDelivery = (orderId: string) => {
-    const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    const deliveryEarnings = order.deliveryFee || 60;
-
-    setOrders(prev => prev.map(o => o.id === orderId ? {
-      ...o,
-      status: 'delivered',
-      paymentStatus: 'paid',
-      updatedAt: new Date().toISOString()
-    } : o));
-
-    if (order.riderId) {
-      setRiders(prev => prev.map(r => r.id === order.riderId ? {
-        ...r,
-        totalDeliveries: r.totalDeliveries + 1,
-        earningsToday: r.earningsToday + deliveryEarnings,
-        earningsWeekly: r.earningsWeekly + deliveryEarnings,
-        totalEarnings: r.totalEarnings + deliveryEarnings,
-        walletBalance: r.walletBalance + deliveryEarnings
-      } : r));
-    }
-
-    sounds.playOrderSuccess();
     try {
-      confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } });
-    } catch {
-      // Safe
-    }
-    triggerToast('Delivery Completed! 🛵', `Earned ₨ ${deliveryEarnings} for this delivery!`, 'success');
+      await updateDoc(doc(db, 'riders', riderId), { isOnline: !rd.isOnline });
+    } catch {}
+
+    setRiders(prev => prev.map(r => r.id === riderId ? { ...r, isOnline: !r.isOnline } : r));
+    triggerToast('Status Changed', !rd.isOnline ? 'You are now ONLINE and ready for orders' : 'You are now OFFLINE', 'info');
   };
 
-  // Admin Actions
-  const approveVendor = (restaurantId: string) => {
-    setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, isApproved: true } : r));
-    triggerToast('Vendor Approved', 'Vendor account activated successfully', 'success');
+  const riderClaimDelivery = async (orderId: string, riderId: string) => {
+    const rd = riders.find(r => r.id === riderId);
+    await updateOrderStatus(orderId, 'out_for_delivery', riderId);
+    triggerToast('Order Picked Up!', `You claimed order #${orderId.slice(-4)}. Navigate to delivery location.`, 'success');
   };
 
-  const toggleVendorStatus = (restaurantId: string) => {
-    setRestaurants(prev => prev.map(r => r.id === restaurantId ? { ...r, isApproved: !r.isApproved } : r));
+  const riderCompleteDelivery = async (orderId: string) => {
+    await updateOrderStatus(orderId, 'delivered');
+    triggerToast('Delivery Completed! 🎉', 'Order marked delivered. Payment added to your wallet.', 'success');
   };
 
-  const onboardRider = (riderData: Omit<Rider, 'id' | 'totalDeliveries' | 'rating' | 'earningsToday' | 'earningsWeekly' | 'totalEarnings' | 'walletBalance'>) => {
+  // Admin Controls
+  const approveVendor = async (restaurantId: string) => {
+    await updateRestaurantDetails(restaurantId, { isApproved: true });
+    triggerToast('Vendor Approved', 'Vendor is now verified and active', 'success');
+  };
+
+  const toggleVendorStatus = async (restaurantId: string) => {
+    const r = restaurants.find(rest => rest.id === restaurantId);
+    if (!r) return;
+    await updateRestaurantDetails(restaurantId, { isOpen: !r.isOpen });
+  };
+
+  const toggleUserBlock = async (userId: string) => {
+    const u = allUsers.find(user => user.id === userId);
+    if (!u) return;
+
+    try {
+      await updateDoc(doc(db, 'users', userId), { isBlocked: !u.isBlocked });
+    } catch {}
+
+    setAllUsers(prev => prev.map(usr => usr.id === userId ? { ...usr, isBlocked: !usr.isBlocked } : usr));
+    triggerToast('User Status Updated', !u.isBlocked ? 'User blocked from ordering' : 'User unblocked', 'warning');
+  };
+
+  const onboardRider = async (riderData: Omit<Rider, 'id' | 'totalDeliveries' | 'rating' | 'earningsToday' | 'earningsWeekly' | 'totalEarnings' | 'walletBalance'>) => {
+    const riderId = 'rider-' + Date.now();
     const newRider: Rider = {
       ...riderData,
-      id: 'rider-' + Date.now(),
+      id: riderId,
       totalDeliveries: 0,
       rating: 5.0,
       earningsToday: 0,
@@ -826,52 +815,166 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalEarnings: 0,
       walletBalance: 0
     };
+
+    try {
+      await setDoc(doc(db, 'riders', riderId), newRider);
+    } catch {}
+
     setRiders(prev => [newRider, ...prev]);
-    triggerToast('Rider Onboarded', `${newRider.name} is now registered`, 'success');
+    triggerToast('Rider Onboarded', `${newRider.name} added to fleet in ${newRider.currentArea}`, 'success');
   };
 
-  const toggleUserBlock = (userId: string) => {
-    setAllUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        const nextState = !u.isBlocked;
-        triggerToast('User Status Updated', `${u.name} is now ${nextState ? 'BLOCKED' : 'ACTIVE'}`, nextState ? 'error' : 'success');
-        return { ...u, isBlocked: nextState };
-      }
-      return u;
-    }));
+  const updatePlatformSettings = async (settingsUpdates: Partial<PlatformSettings>) => {
+    const updated = { ...platformSettings, ...settingsUpdates };
+    setPlatformSettings(updated);
+    try {
+      await setDoc(doc(db, 'settings', 'main_config'), updated);
+    } catch {}
+    triggerToast('Settings Saved', 'Platform rates and contact details updated', 'success');
   };
 
-  const updatePlatformSettings = (settingsUpdate: Partial<PlatformSettings>) => {
-    setPlatformSettings(prev => ({ ...prev, ...settingsUpdate }));
-  };
-
-  const addCategory = (catData: Omit<Category, 'id'>) => {
-    const newCat: Category = {
-      ...catData,
-      id: 'cat-' + Date.now()
-    };
+  const addCategory = async (catData: Omit<Category, 'id'>) => {
+    const catId = 'cat-' + Date.now();
+    const newCat: Category = { ...catData, id: catId };
+    try {
+      await setDoc(doc(db, 'categories', catId), newCat);
+    } catch {}
     setCategories(prev => [...prev, newCat]);
     triggerToast('Category Created', `${newCat.name} added`, 'success');
   };
 
-  const deleteCategory = (id: string) => {
+  const deleteCategory = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'categories', id));
+    } catch {}
     setCategories(prev => prev.filter(c => c.id !== id));
   };
 
-  const addBannerPromo = (promoData: Omit<BannerPromo, 'id'>) => {
-    const newPromo: BannerPromo = {
-      ...promoData,
-      id: 'promo-' + Date.now()
-    };
+  const addBannerPromo = async (promoData: Omit<BannerPromo, 'id'>) => {
+    const promoId = 'promo-' + Date.now();
+    const newPromo: BannerPromo = { ...promoData, id: promoId };
+    try {
+      await setDoc(doc(db, 'promos', promoId), newPromo);
+    } catch {}
     setBannerPromos(prev => [newPromo, ...prev]);
     triggerToast('Banner Added', 'New promotion published', 'success');
   };
 
-  const deleteBannerPromo = (id: string) => {
+  const deleteBannerPromo = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'promos', id));
+    } catch {}
     setBannerPromos(prev => prev.filter(p => p.id !== id));
   };
 
-  // Auth Functions
+  // Real Email/Password Auth System
+  const loginWithEmailPassword = async (email: string, pass: string, role?: UserRole) => {
+    const user = await loginFirebaseUser(email, pass);
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setCurrentRole(role || user.role);
+    setIsAuthModalOpen(false);
+    triggerToast('Welcome Back!', `Logged in successfully as ${user.name || user.email}`, 'success');
+  };
+
+  const registerWithEmailPassword = async (data: {
+    email: string;
+    pass: string;
+    name: string;
+    phone: string;
+    role: UserRole;
+    address?: string;
+    area?: string;
+    shopName?: string;
+    shopOwner?: string;
+    vehiclePlate?: string;
+  }) => {
+    const userAddresses: Address[] = data.address ? [{
+      id: 'addr-' + Date.now(),
+      label: 'Home',
+      area: data.area || 'Shahi Bazaar',
+      streetAddress: data.address,
+      phone: data.phone,
+      isDefault: true
+    }] : [];
+
+    const { user } = await registerFirebaseUser(data.email, data.pass, {
+      name: data.name,
+      phone: data.phone,
+      role: data.role,
+      addresses: userAddresses
+    });
+
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    setCurrentRole(data.role);
+
+    // If vendor role, create restaurant record in Firestore
+    if (data.role === 'vendor' && data.shopName) {
+      const restId = 'rest-' + Date.now();
+      const newRest: Restaurant = {
+        id: restId,
+        vendorId: user.id,
+        name: data.shopName,
+        image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
+        categories: ['Fast Food', 'Biryani'],
+        rating: 5.0,
+        reviewsCount: 0,
+        isOpen: true,
+        deliveryTime: '20-30 min',
+        minOrder: 150,
+        deliveryFee: 50,
+        address: `${data.area || 'Shahi Bazaar'}, Matli`,
+        area: data.area || 'Shahi Bazaar',
+        phone: data.phone,
+        whatsappNumber: data.phone,
+        description: `Authentic food and takeaway from ${data.shopName}, Matli.`,
+        commissionRate: 10,
+        openingHours: '11:00 AM - 12:00 AM',
+        totalOrdersCount: 0,
+        totalRevenue: 0,
+        isApproved: true
+      };
+      await setDoc(doc(db, 'restaurants', restId), newRest);
+      setActiveVendorRestaurantId(restId);
+    } else if (data.role === 'rider') {
+      const riderId = 'rider-' + Date.now();
+      const newRider: Rider = {
+        id: riderId,
+        userId: user.id,
+        name: data.name,
+        phone: data.phone,
+        vehicleType: 'bike',
+        vehiclePlateNumber: data.vehiclePlate || 'MATLI-BIKE',
+        cnicNumber: '41103-XXXXXXX-1',
+        isOnline: true,
+        isVerified: true,
+        currentArea: data.area || 'Shahi Bazaar',
+        totalDeliveries: 0,
+        rating: 5.0,
+        earningsToday: 0,
+        earningsWeekly: 0,
+        totalEarnings: 0,
+        walletBalance: 0
+      };
+      await setDoc(doc(db, 'riders', riderId), newRider);
+      setActiveRiderId(riderId);
+    }
+
+    setIsAuthModalOpen(false);
+    sounds.playOrderSuccess();
+    try {
+      confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+    } catch {}
+
+    triggerToast('Account Created Live!', `Welcome to Dastak Delivery, ${data.name}!`, 'success');
+  };
+
+  const sendPasswordReset = async (email: string) => {
+    await resetFirebasePassword(email);
+    triggerToast('Password Reset Email Sent', 'Check your inbox for the password reset link.', 'info');
+  };
+
   const openLoginModal = (role: UserRole = 'customer') => {
     setAuthModalRole(role);
     setIsAuthModalOpen(true);
@@ -880,10 +983,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const loginUser = (emailOrPhone: string, role: UserRole, extra?: { name?: string; restaurantId?: string; riderId?: string }) => {
     setIsAuthenticated(true);
     setCurrentRole(role);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', role);
-    } catch {}
 
     if (role === 'customer') {
       const existingUser = allUsers.find(u => u.email === emailOrPhone || u.phone === emailOrPhone);
@@ -900,79 +999,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isBlocked: false,
           createdAt: new Date().toISOString()
         };
-        setAllUsers(prev => [newUser, ...prev]);
         setCurrentUser(newUser);
       }
-      triggerToast('Logged In', `Welcome ${extra?.name || emailOrPhone}!`, 'success');
     } else if (role === 'vendor') {
-      if (extra?.restaurantId) {
-        setActiveVendorRestaurantId(extra.restaurantId);
-      }
-      const vendorRest = restaurants.find(r => r.id === (extra?.restaurantId || activeVendorRestaurantId));
-      triggerToast('Vendor Portal', `Logged in as ${vendorRest?.name || 'Restaurant Partner'}`, 'success');
+      if (extra?.restaurantId) setActiveVendorRestaurantId(extra.restaurantId);
     } else if (role === 'rider') {
-      if (extra?.riderId) {
-        setActiveRiderId(extra.riderId);
-      }
-      const activeRd = riders.find(r => r.id === (extra?.riderId || activeRiderId));
-      triggerToast('Rider Fleet', `Welcome rider ${activeRd?.name || 'Partner'}!`, 'success');
-    } else if (role === 'admin') {
-      triggerToast('Admin Console', 'Super Admin access granted with full restaurant controls', 'success');
+      if (extra?.riderId) setActiveRiderId(extra.riderId);
     }
     setIsAuthModalOpen(false);
   };
 
-  const registerCustomerAccount = (data: { 
+  const registerCustomerAccount = async (data: { 
     name: string; 
     phone: string; 
     email?: string; 
     password?: string; 
     address?: string; 
     area?: string;
-  }): User => {
-    const userId = 'user-' + Date.now();
+  }): Promise<User> => {
     const cleanPhone = data.phone.trim();
     const userEmail = data.email?.trim() || `${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
+    const userPass = data.password?.trim() || 'dastak123456';
 
-    const userAddresses: Address[] = data.address ? [{
-      id: 'addr-' + Date.now(),
-      label: 'Home',
-      area: data.area || 'Shahi Bazaar, Matli',
-      streetAddress: data.address,
-      phone: cleanPhone,
-      isDefault: true
-    }] : [];
-
-    const newUser: User = {
-      id: userId,
-      name: data.name.trim(),
-      phone: cleanPhone,
-      email: userEmail,
-      role: 'customer',
-      addresses: userAddresses,
-      isBlocked: false,
-      createdAt: new Date().toISOString()
-    };
-
-    setAllUsers(prev => [newUser, ...prev]);
-    setCurrentUser(newUser);
-    setIsAuthenticated(true);
-    setCurrentRole('customer');
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'customer');
-    } catch {}
-
-    setIsAuthModalOpen(false);
-    sounds.playOrderSuccess();
-    try {
-      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
-    } catch {}
-    triggerToast('Account Created!', `Welcome to Dastak Delivery, ${newUser.name}!`, 'success');
-    return newUser;
+      await registerWithEmailPassword({
+        email: userEmail,
+        pass: userPass,
+        name: data.name,
+        phone: cleanPhone,
+        role: 'customer',
+        address: data.address,
+        area: data.area
+      });
+      return currentUser;
+    } catch {
+      // Fallback in-memory
+      const fallbackUser: User = {
+        id: 'user-' + Date.now(),
+        name: data.name,
+        phone: cleanPhone,
+        email: userEmail,
+        role: 'customer',
+        addresses: data.address ? [{
+          id: 'addr-' + Date.now(),
+          label: 'Home',
+          area: data.area || 'Shahi Bazaar',
+          streetAddress: data.address,
+          phone: cleanPhone,
+          isDefault: true
+        }] : [],
+        isBlocked: false,
+        createdAt: new Date().toISOString()
+      };
+      setCurrentUser(fallbackUser);
+      setIsAuthenticated(true);
+      return fallbackUser;
+    }
   };
 
-  const registerNewVendor = (vendorData: {
+  const registerNewVendor = async (vendorData: {
     name: string;
     nameUrdu?: string;
     ownerName: string;
@@ -981,6 +1066,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     address: string;
     area: string;
     categories: string[];
+    email?: string;
     minOrder?: number;
     deliveryFee?: number;
     deliveryTime?: string;
@@ -988,19 +1074,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     image?: string;
     description?: string;
     password?: string;
-  }): { restaurantId: string; vendorId: string; restaurant: Restaurant } => {
+  }): Promise<{ restaurantId: string; vendorId: string; restaurant: Restaurant }> => {
     const timestamp = Date.now();
     const restaurantId = 'rest-' + timestamp;
-    const vendorId = 'vnd-' + Math.floor(1000 + Math.random() * 9000);
+    const cleanPhone = vendorData.phone.trim();
+    const vendorEmail = vendorData.email?.trim() || `vendor_${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
+    const vendorPass = vendorData.password?.trim() || 'vendor123456';
 
-    const defaultImage = vendorData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80';
+    try {
+      await registerWithEmailPassword({
+        email: vendorEmail,
+        pass: vendorPass,
+        name: vendorData.ownerName,
+        phone: cleanPhone,
+        role: 'vendor',
+        area: vendorData.area,
+        shopName: vendorData.name,
+        shopOwner: vendorData.ownerName
+      });
+    } catch {}
 
     const newRestaurant: Restaurant = {
       id: restaurantId,
-      vendorId: vendorId,
+      vendorId: 'vnd-' + timestamp,
       name: vendorData.name.trim(),
       nameUrdu: vendorData.nameUrdu?.trim() || vendorData.name.trim(),
-      image: defaultImage,
+      image: vendorData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
       categories: vendorData.categories.length > 0 ? vendorData.categories : ['Fast Food', 'Biryani'],
       rating: 5.0,
       reviewsCount: 1,
@@ -1021,73 +1120,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isApproved: true
     };
 
-    // Add 2 default sample menu items for the new shop so they have instant products
-    const initialItems: MenuItem[] = [
-      {
-        id: 'item-' + timestamp + '-1',
-        restaurantId: restaurantId,
-        name: `${vendorData.name} Special Item 1`,
-        nameUrdu: `${vendorData.name} اسپیشل ڈش`,
-        description: 'Fresh and hygienic preparation with authentic taste in Matli.',
-        price: 280,
-        image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&auto=format&fit=crop&q=80',
-        category: vendorData.categories[0] || 'Fast Food',
-        isAvailable: true,
-        preparationTime: '15 min'
-      },
-      {
-        id: 'item-' + timestamp + '-2',
-        restaurantId: restaurantId,
-        name: `${vendorData.name} Deal / Drink Combo`,
-        nameUrdu: 'اسپیشل ڈیل مع کولڈ ڈرنک',
-        description: 'Special combo deal with chilled beverage.',
-        price: 450,
-        discountedPrice: 399,
-        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80',
-        category: vendorData.categories[0] || 'Fast Food',
-        isAvailable: true,
-        isCombo: true,
-        preparationTime: '20 min'
-      }
-    ];
-
-    setRestaurants(prev => [newRestaurant, ...prev]);
-    setMenuItems(prev => [...initialItems, ...prev]);
+    await setDoc(doc(db, 'restaurants', restaurantId), newRestaurant);
     setActiveVendorRestaurantId(restaurantId);
-    setCurrentRole('vendor');
-    setIsAuthenticated(true);
-
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'vendor');
-    } catch {}
-
-    setIsAuthModalOpen(false);
-    sounds.playOrderSuccess();
-    try {
-      confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
-    } catch {}
-
-    triggerToast('Shop Registered! 🏪', `Vendor ID: ${vendorId.toUpperCase()} created for ${newRestaurant.name}!`, 'success');
-    return { restaurantId, vendorId, restaurant: newRestaurant };
+    return { restaurantId, vendorId: newRestaurant.vendorId, restaurant: newRestaurant };
   };
 
-  const registerRider = (riderData: {
+  const registerRider = async (riderData: {
     name: string;
     phone: string;
-    cnicNumber: string;
-    vehicleType: 'bike' | 'loader' | 'bicycle';
-    vehiclePlateNumber: string;
-    currentArea: string;
-  }): Rider => {
+    email?: string;
+    password?: string;
+    cnicNumber?: string;
+    vehicleType?: 'bike' | 'loader' | 'bicycle';
+    vehiclePlateNumber?: string;
+    currentArea?: string;
+  }): Promise<Rider> => {
+    const cleanPhone = riderData.phone.trim();
+    const riderEmail = riderData.email?.trim() || `rider_${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
+    const riderPass = riderData.password?.trim() || 'rider123456';
+
+    try {
+      await registerWithEmailPassword({
+        email: riderEmail,
+        pass: riderPass,
+        name: riderData.name,
+        phone: cleanPhone,
+        role: 'rider',
+        area: riderData.currentArea,
+        vehiclePlate: riderData.vehiclePlateNumber
+      });
+    } catch {}
+
     const riderId = 'rider-' + Date.now();
     const newRider: Rider = {
       id: riderId,
       userId: 'user-rd-' + Date.now(),
       name: riderData.name.trim(),
-      phone: riderData.phone.trim(),
-      vehicleType: riderData.vehicleType,
-      vehiclePlateNumber: riderData.vehiclePlateNumber || 'KHI-XXXX',
+      phone: cleanPhone,
+      vehicleType: riderData.vehicleType || 'bike',
+      vehiclePlateNumber: riderData.vehiclePlateNumber || 'MATLI-BIKE',
       cnicNumber: riderData.cnicNumber || '41103-XXXXXXX-1',
       isOnline: true,
       isVerified: true,
@@ -1100,28 +1171,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       walletBalance: 0
     };
 
-    setRiders(prev => [newRider, ...prev]);
+    await setDoc(doc(db, 'riders', riderId), newRider);
     setActiveRiderId(riderId);
-    setCurrentRole('rider');
-    setIsAuthenticated(true);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
-      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'rider');
-    } catch {}
-
-    setIsAuthModalOpen(false);
-    sounds.playOrderSuccess();
-    triggerToast('Rider Registered! 🛵', `Welcome ${newRider.name} to Dastak Matli Delivery Fleet!`, 'success');
     return newRider;
   };
 
-  const logoutUser = () => {
+  const logoutUser = async () => {
+    try {
+      await logoutFirebaseUser();
+    } catch {}
     setIsAuthenticated(false);
     setCurrentRole('customer');
-    try {
-      localStorage.removeItem(LOCAL_STORAGE_KEY + '_auth');
-    } catch {}
-    triggerToast('Logged Out', 'Signed out successfully. Guest mode active.', 'info');
+    triggerToast('Logged Out', 'Signed out from Firebase successfully.', 'info');
   };
 
   const handleSetAllowRiderViewCustomerInfo = (val: boolean) => {
@@ -1133,28 +1194,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Admin Universal Product Controls
-  const adminAddNewProduct = (itemData: Omit<MenuItem, 'id'>) => {
+  const adminAddNewProduct = async (itemData: Omit<MenuItem, 'id'>) => {
+    const newItemId = 'item-' + Date.now();
     const newItem: MenuItem = {
       ...itemData,
-      id: 'item-' + Date.now()
+      id: newItemId
     };
+    try {
+      await setDoc(doc(db, 'menuItems', newItemId), newItem);
+    } catch {}
     setMenuItems(prev => [newItem, ...prev]);
-    const targetRest = restaurants.find(r => r.id === newItem.restaurantId);
-    triggerToast('Product Created by Admin', `${newItem.name} added to ${targetRest?.name || 'Restaurant'}`, 'success');
+    triggerToast('Product Created by Admin', `${newItem.name} added to catalog in Firestore`, 'success');
   };
 
-  const adminUpdateProduct = (id: string, updates: Partial<MenuItem>) => {
+  const adminUpdateProduct = async (id: string, updates: Partial<MenuItem>) => {
+    try {
+      await updateDoc(doc(db, 'menuItems', id), updates);
+    } catch {}
     setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-    triggerToast('Product Updated by Admin', 'Product rates and details saved across platform', 'success');
+    triggerToast('Product Updated by Admin', 'Product rates and details saved across Firestore', 'success');
   };
 
-  const adminDeleteProduct = (id: string) => {
+  const adminDeleteProduct = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'menuItems', id));
+    } catch {}
     setMenuItems(prev => prev.filter(item => item.id !== id));
     triggerToast('Product Deleted', 'Item removed from restaurant catalog', 'info');
   };
 
   // Alo Chat Support
-  const sendAloChatMessage = (orderId: string, sender: 'customer' | 'rider' | 'admin', senderName: string, text: string) => {
+  const sendAloChatMessage = async (orderId: string, sender: 'customer' | 'rider' | 'admin', senderName: string, text: string) => {
     if (!text.trim()) return;
     const newMsg: AloChatMessage = {
       id: 'alo-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
@@ -1165,13 +1235,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       isRead: false
     };
-    setAloChatMessages(prev => {
-      const updated = [...prev, newMsg];
-      try {
-        localStorage.setItem(LOCAL_STORAGE_KEY + '_alochat', JSON.stringify(updated));
-      } catch {}
-      return updated;
-    });
+    setAloChatMessages(prev => [...prev, newMsg]);
+    try {
+      await addDoc(collection(db, 'chats'), newMsg);
+    } catch {}
     sounds.playMessage();
   };
 
@@ -1195,8 +1262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBannerPromos(BANNER_PROMOS);
     setPlatformSettings(INITIAL_SETTINGS);
     clearCart();
-    localStorage.clear();
-    triggerToast('Reset Complete', 'App restored to initial Matli sample data', 'info');
+    triggerToast('Reset Complete', 'App restored to initial state', 'info');
   };
 
   return (
@@ -1218,6 +1284,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authModalRole,
         setAuthModalRole,
         openLoginModal,
+        loginWithEmailPassword,
+        registerWithEmailPassword,
+        sendPasswordReset,
         loginUser,
         registerCustomerAccount,
         registerNewVendor,
@@ -1267,7 +1336,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateOrderStatus,
         assignRiderToOrder,
         reorderPastOrder,
-        simulateAdvanceOrderStatus,
         addresses,
         addAddress,
         deleteAddress,

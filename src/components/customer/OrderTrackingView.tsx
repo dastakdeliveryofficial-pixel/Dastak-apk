@@ -106,23 +106,12 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
                 {isCancelled ? t.orderCancelled : steps[currentStepIndex]?.label || 'In Progress'}
               </h1>
             </div>
-
-            {/* Demo Advance Status Simulator Button */}
-            {!isCancelled && order.status !== 'delivered' && (
-              <button
-                onClick={() => simulateAdvanceOrderStatus(order.id)}
-                className="bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs px-4 py-2 rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 self-start sm:self-center"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-pink-400" />
-                <span>Simulate Next Step ⚡</span>
-              </button>
-            )}
           </div>
 
-          {/* Stepper Progress Bar */}
+          {/* Stepper Progress Bar (Strictly Read-Only, Driven by Real Backend Actions) */}
           {!isCancelled ? (
             <div className="pt-2">
-              <div className="grid grid-cols-5 gap-1 relative">
+              <div className="grid grid-cols-5 gap-1 relative pointer-events-none select-none">
                 {steps.map((step, idx) => {
                   const isDone = currentStepIndex >= idx;
                   const isCurrent = currentStepIndex === idx;
@@ -153,20 +142,20 @@ export const OrderTrackingView: React.FC<OrderTrackingViewProps> = ({
             </div>
           ) : (
             <div className="p-3 bg-rose-50 rounded-2xl border border-rose-200 text-xs text-rose-800">
-              Reason: {order.cancelReason || 'Order was cancelled by customer or vendor.'}
+              Reason: {order.cancelReason || 'Order was cancelled.'}
             </div>
           )}
         </div>
 
-        {/* Live Interactive Map of Matli */}
+        {/* Live Delivery Map of Matli */}
         <div>
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-xs font-bold text-pink-900/70 uppercase tracking-wider">
-              Live Delivery Route (Matli Town)
+              Delivery Route (Matli Town)
             </h3>
             <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              Real-time GPS Simulator
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Order Status
             </span>
           </div>
 

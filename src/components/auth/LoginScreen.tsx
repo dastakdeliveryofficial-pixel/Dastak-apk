@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, Store, Bike, ShieldAlert, KeyRound, Mail, 
   LogIn, UserPlus, Eye, EyeOff, AlertCircle,
-  MapPin, CheckCircle2, Phone, Lock, Sparkles
+  MapPin, CheckCircle2, Phone, Lock, Sparkles, Loader2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -14,6 +14,9 @@ import { DastakLogo } from '../common/DastakLogo';
 export const LoginScreen: React.FC = () => {
   const { 
     loginUser, 
+    loginWithEmailPassword,
+    registerWithEmailPassword,
+    sendPasswordReset,
     registerCustomerAccount,
     registerNewVendor,
     registerRider,
@@ -26,16 +29,18 @@ export const LoginScreen: React.FC = () => {
   } = useApp();
 
   const [selectedRole, setSelectedRole] = useState<UserRole>('customer');
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
 
   // Input states - strictly empty by default
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Customer Registration State
   const [regCustomerName, setRegCustomerName] = useState('');
+  const [regCustomerEmail, setRegCustomerEmail] = useState('');
   const [regCustomerPhone, setRegCustomerPhone] = useState('');
   const [regCustomerAddress, setRegCustomerAddress] = useState('');
   const [regCustomerArea, setRegCustomerArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
@@ -44,14 +49,17 @@ export const LoginScreen: React.FC = () => {
   // Vendor Registration State
   const [regShopName, setRegShopName] = useState('');
   const [regShopOwner, setRegShopOwner] = useState('');
+  const [regShopEmail, setRegShopEmail] = useState('');
   const [regShopPhone, setRegShopPhone] = useState('');
   const [regShopArea, setRegShopArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
-  const [regShopCategory, setRegShopCategory] = useState('Fast Food');
+  const [regShopPassword, setRegShopPassword] = useState('');
 
   // Rider Registration State
   const [regRiderName, setRegRiderName] = useState('');
+  const [regRiderEmail, setRegRiderEmail] = useState('');
   const [regRiderPhone, setRegRiderPhone] = useState('');
   const [regRiderPlate, setRegRiderPlate] = useState('');
+  const [regRiderPassword, setRegRiderPassword] = useState('');
 
   // Role switch handler
   const handleSelectRole = (role: UserRole) => {
@@ -63,158 +71,136 @@ export const LoginScreen: React.FC = () => {
   };
 
   // Form Submission
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setIsLoading(true);
 
-    if (authMode === 'register') {
-      if (selectedRole === 'customer') {
-        if (!regCustomerName.trim() || !regCustomerPhone.trim()) {
-          setErrorMsg('Please enter your full name and mobile number.');
+    try {
+      if (authMode === 'forgot') {
+        if (!identifier.trim()) {
+          setErrorMsg('Please enter your registered email address.');
+          setIsLoading(false);
           return;
         }
-        if (!regCustomerPassword.trim() && !password.trim()) {
-          setErrorMsg('Please enter a password for your account.');
-          return;
-        }
-        registerCustomerAccount({
-          name: regCustomerName.trim(),
-          phone: regCustomerPhone.trim(),
-          address: regCustomerAddress.trim(),
-          area: regCustomerArea,
-          password: regCustomerPassword.trim() || password.trim() || '123456'
-        });
-      } else if (selectedRole === 'vendor') {
-        if (!regShopName.trim() || !regShopPhone.trim() || !regShopOwner.trim()) {
-          setErrorMsg('Please enter Shop Name, Owner Name and Phone.');
-          return;
-        }
-        registerNewVendor({
-          name: regShopName.trim(),
-          ownerName: regShopOwner.trim(),
-          phone: regShopPhone.trim(),
-          whatsappNumber: regShopPhone.trim(),
-          address: `${regShopArea}, Matli`,
-          area: regShopArea,
-          categories: [regShopCategory]
-        });
-      } else if (selectedRole === 'rider') {
-        if (!regRiderName.trim() || !regRiderPhone.trim()) {
-          setErrorMsg('Please enter Rider Name and Phone Number.');
-          return;
-        }
-        registerRider({
-          name: regRiderName.trim(),
-          phone: regRiderPhone.trim(),
-          cnicNumber: '41103-XXXXXXX-1',
-          vehicleType: 'bike',
-          vehiclePlateNumber: regRiderPlate.trim() || 'MATLI-BIKE',
-          currentArea: MATLI_AREAS[0] || 'Shahi Bazaar'
-        });
+        await sendPasswordReset(identifier.trim());
+        setAuthMode('login');
+        setIsLoading(false);
+        return;
       }
-      return;
-    }
 
-    // Login Verification
-    const cleanId = identifier.trim().toLowerCase();
-    const cleanPass = password.trim();
+      if (authMode === 'register') {
+        if (selectedRole === 'customer') {
+          if (!regCustomerName.trim() || !regCustomerPhone.trim()) {
+            setErrorMsg('Please enter your full name and mobile number.');
+            setIsLoading(false);
+            return;
+          }
+          const email = regCustomerEmail.trim() || `${regCustomerPhone.trim().replace(/[^0-9]/g, '')}@dastak.pk`;
+          const pass = regCustomerPassword.trim() || password.trim() || 'dastak123';
 
-    // 1. Mandatory Email/Username & Password Checks
-    if (!cleanId || !cleanPass) {
-      setErrorMsg(
-        language === 'ur' 
-          ? 'براہ کرم ای میل/فون نمبر اور پاس ورڈ دونوں درج کریں۔'
-          : 'Please enter both your email/username and password.'
-      );
-      return;
-    }
+          await registerWithEmailPassword({
+            email,
+            pass,
+            name: regCustomerName.trim(),
+            phone: regCustomerPhone.trim(),
+            role: 'customer',
+            address: regCustomerAddress.trim(),
+            area: regCustomerArea
+          });
+        } else if (selectedRole === 'vendor') {
+          if (!regShopName.trim() || !regShopPhone.trim() || !regShopOwner.trim()) {
+            setErrorMsg('Please enter Shop Name, Owner Name and Phone.');
+            setIsLoading(false);
+            return;
+          }
+          const email = regShopEmail.trim() || `vendor_${regShopPhone.trim().replace(/[^0-9]/g, '')}@dastak.pk`;
+          const pass = regShopPassword.trim() || password.trim() || 'vendor123';
 
-    // 2. Strict Role Credentials Validation
-    if (selectedRole === 'admin') {
-      const validAdminIds = ['admin@dastak.pk', 'admin', '03000000000', '0300-0000000', 'superadmin', 'admin@dastakdelivery.pk'];
-      const validAdminPass = ['admin123', 'adminpass2026', 'admin'];
+          await registerWithEmailPassword({
+            email,
+            pass,
+            name: regShopOwner.trim(),
+            phone: regShopPhone.trim(),
+            role: 'vendor',
+            area: regShopArea,
+            shopName: regShopName.trim(),
+            shopOwner: regShopOwner.trim()
+          });
+        } else if (selectedRole === 'rider') {
+          if (!regRiderName.trim() || !regRiderPhone.trim()) {
+            setErrorMsg('Please enter Rider Name and Phone Number.');
+            setIsLoading(false);
+            return;
+          }
+          const email = regRiderEmail.trim() || `rider_${regRiderPhone.trim().replace(/[^0-9]/g, '')}@dastak.pk`;
+          const pass = regRiderPassword.trim() || password.trim() || 'rider123';
 
-      if (validAdminIds.includes(cleanId) && validAdminPass.includes(cleanPass)) {
-        loginUser(cleanId, 'admin', { name: 'Super Admin Matli' });
-      } else {
+          await registerWithEmailPassword({
+            email,
+            pass,
+            name: regRiderName.trim(),
+            phone: regRiderPhone.trim(),
+            role: 'rider',
+            area: MATLI_AREAS[0] || 'Shahi Bazaar',
+            vehiclePlate: regRiderPlate.trim() || 'MATLI-BIKE'
+          });
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Login Verification
+      const cleanId = identifier.trim().toLowerCase();
+      const cleanPass = password.trim();
+
+      if (!cleanId || !cleanPass) {
         setErrorMsg(
-          language === 'ur'
-            ? 'غلط ایڈمن ای میل یا پاس ورڈ۔ دوبارہ کوشش کریں۔'
-            : 'Invalid email/username or password for Super Admin.'
+          language === 'ur' 
+            ? 'براہ کرم ای میل/فون نمبر اور پاس ورڈ دونوں درج کریں۔'
+            : 'Please enter both your email/username and password.'
         );
+        setIsLoading(false);
+        return;
       }
-      return;
-    }
 
-    if (selectedRole === 'vendor') {
-      const validVendorIds = ['vendor@dastak.pk', 'vendor', '03009876543', '0300-9876543'];
-      const validVendorPass = ['vendor123', 'vendor', '123456', '1234'];
-      
-      const isDefaultVendor = validVendorIds.includes(cleanId) && validVendorPass.includes(cleanPass);
-      const isRegisteredRestaurant = restaurants.some(
-        r => (r.phone && r.phone.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) || 
-             (r.whatsappNumber && r.whatsappNumber.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) ||
-             r.id.toLowerCase() === cleanId
-      );
+      // Try Firebase Auth first if email format, otherwise use matched credential
+      let emailToAuth = cleanId;
+      if (!cleanId.includes('@')) {
+        if (selectedRole === 'admin') emailToAuth = 'admin@dastak.pk';
+        else if (selectedRole === 'vendor') emailToAuth = 'vendor@dastak.pk';
+        else if (selectedRole === 'rider') emailToAuth = 'rider@dastak.pk';
+        else emailToAuth = `${cleanId.replace(/[^0-9]/g, '')}@dastak.pk`;
+      }
 
-      if (isDefaultVendor || (isRegisteredRestaurant && cleanPass.length >= 4)) {
-        loginUser(cleanId, 'vendor', {
-          restaurantId: 'rest-1'
-        });
-      } else {
-        setErrorMsg(
-          language === 'ur'
-            ? 'غلط وینڈر ای میل/فون یا پاس ورڈ۔'
-            : 'Invalid email/phone or password.'
+      try {
+        await loginWithEmailPassword(emailToAuth, cleanPass, selectedRole);
+      } catch (err: any) {
+        // Fallback local check for standard preset roles
+        const demoAcc = DEMO_ACCOUNTS[selectedRole];
+        const isMatchedDemo = (
+          (cleanId === demoAcc.email.toLowerCase() || cleanId === selectedRole || cleanId.replace(/[^0-9]/g, '') === demoAcc.phone.replace(/[^0-9]/g, '')) &&
+          (cleanPass === demoAcc.password || cleanPass === '123456' || cleanPass === 'admin123')
         );
+
+        if (isMatchedDemo) {
+          loginUser(cleanId, selectedRole, {
+            name: demoAcc.name,
+            restaurantId: demoAcc.restaurantId,
+            riderId: demoAcc.riderId
+          });
+        } else {
+          setErrorMsg(
+            language === 'ur'
+              ? 'غلط ای میل، یوزرنیم یا پاس ورڈ۔ دوبارہ کوشش کریں۔'
+              : 'Invalid email or password. Please verify credentials.'
+          );
+        }
       }
-      return;
-    }
-
-    if (selectedRole === 'rider') {
-      const validRiderIds = ['rider@dastak.pk', 'rider', '03005555555', '0300-5555555'];
-      const validRiderPass = ['rider123', 'rider', '123456', '1234'];
-
-      const isDefaultRider = validRiderIds.includes(cleanId) && validRiderPass.includes(cleanPass);
-      const isRegisteredRider = riders.some(
-        rd => rd.phone.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '') || rd.id.toLowerCase() === cleanId
-      );
-
-      if (isDefaultRider || (isRegisteredRider && cleanPass.length >= 4)) {
-        loginUser(cleanId, 'rider', {
-          riderId: 'rider-1'
-        });
-      } else {
-        setErrorMsg(
-          language === 'ur'
-            ? 'غلط رائڈر ای میل/فون یا پاس ورڈ۔'
-            : 'Invalid email/phone or password.'
-        );
-      }
-      return;
-    }
-
-    // Customer
-    const validCustomerIds = ['customer@dastak.pk', 'customer', '03001234567', '0300-1234567'];
-    const validCustomerPass = ['customer123', 'customer', '123456', '1234'];
-
-    const isDefaultCustomer = validCustomerIds.includes(cleanId) && validCustomerPass.includes(cleanPass);
-    const registeredCust = (allUsers || []).find(
-      c => (c.phone && c.phone.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) || 
-           (c.email && c.email.toLowerCase() === cleanId) ||
-           (c.name && c.name.toLowerCase() === cleanId)
-    );
-
-    if (isDefaultCustomer || (registeredCust && cleanPass.length >= 4) || (cleanPass.length >= 4 && cleanId.length >= 3)) {
-      loginUser(cleanId, 'customer', {
-        name: registeredCust ? registeredCust.name : isDefaultCustomer ? 'Matli Customer' : cleanId
-      });
-    } else {
-      setErrorMsg(
-        language === 'ur'
-          ? 'غلط ای میل/فون نمبر یا پاس ورڈ۔'
-          : 'Invalid email or password.'
-      );
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Authentication error. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -243,231 +229,209 @@ export const LoginScreen: React.FC = () => {
               DASTAK DELIVERY
             </h1>
             <span className="text-[10px] font-bold text-[#E11D74] uppercase tracking-wider">
-              Matli, Sindh • Multi-Role Portal
+              Matli, Sindh • Live Cloud Platform
             </span>
           </div>
         </div>
 
-        {/* Language selector */}
-        <div className="flex items-center bg-white/90 backdrop-blur-xs border border-pink-200 rounded-xl p-1 shadow-2xs">
-          <button
-            onClick={() => setLanguage('en')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              language === 'en' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            English
-          </button>
-          <button
-            onClick={() => setLanguage('ur')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              language === 'ur' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            اردو
-          </button>
-          <button
-            onClick={() => setLanguage('sd')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              language === 'sd' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            سنڌي
-          </button>
+        {/* Language Selector */}
+        <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-xs border border-pink-100">
+          {(['en', 'ur', 'sd'] as const).map(lang => (
+            <button
+              key={lang}
+              onClick={() => setLanguage(lang)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                language === lang 
+                  ? 'bg-[#E11D74] text-white shadow-xs' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-pink-50'
+              }`}
+            >
+              {lang === 'en' ? 'English' : lang === 'ur' ? 'اردو' : 'سنڌي'}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* Main Login Screen */}
-      <main className="max-w-xl mx-auto w-full my-auto">
-        <div className="bg-white rounded-3xl border border-pink-200/90 shadow-2xl shadow-pink-500/10 overflow-hidden">
+      {/* Main Authentication Card */}
+      <main className="max-w-md mx-auto w-full flex-1 flex flex-col justify-center my-auto">
+        <div className="bg-white rounded-3xl shadow-xl shadow-pink-900/5 border border-pink-100/80 overflow-hidden">
           
-          {/* Header Banner */}
-          <div className="p-5 sm:p-6 bg-gradient-to-r from-pink-50 via-white to-pink-50 border-b border-pink-100 text-center">
-            <div className="inline-flex items-center justify-center p-2.5 bg-pink-100/70 rounded-2xl mb-3 text-[#E11D74]">
-              <Lock className="w-6 h-6" />
+          {/* Top Banner with Matli City Badge */}
+          <div className="bg-gradient-to-r from-[#E11D74] via-[#D81B60] to-[#C2185B] p-6 text-white text-center relative">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-semibold mb-2">
+              <MapPin className="w-3.5 h-3.5 text-pink-200" />
+              <span>Matli Food & Grocery Delivery</span>
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900">
+            <h2 className="text-xl sm:text-2xl font-black tracking-tight">
               {getRoleTitle(selectedRole)}
             </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              {language === 'ur' 
-                ? 'اپنے مطلوبہ رول کا انتخاب کریں اور لاگ ان تفصیلات درج کریں۔'
-                : 'Select your role and enter your credentials to access the platform.'}
+            <p className="text-xs text-pink-100 mt-1 max-w-xs mx-auto">
+              {selectedRole === 'customer' && 'Order delicious food, fresh biryani, fast food & groceries in Matli'}
+              {selectedRole === 'vendor' && 'Manage your kitchen catalog, live orders & daily payouts'}
+              {selectedRole === 'rider' && 'Deliver food orders across Matli & earn daily income'}
+              {selectedRole === 'admin' && 'Secure administrative console & platform management'}
             </p>
           </div>
 
-          {/* 4-Role Selector Tabs */}
-          <div className="p-3 sm:p-4 bg-gray-50/70 border-b border-pink-100">
-            <span className="text-[11px] font-black uppercase tracking-wider text-gray-400 block mb-2 px-1 text-center">
-              {language === 'ur' ? 'رول منتخب کریں' : 'Select Account Role'}:
-            </span>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {/* Customer Tab */}
+          {/* Role Selection Tabs */}
+          <div className="p-5 pb-0">
+            <label className="text-xs font-black uppercase tracking-wider text-gray-500 block mb-2">
+              {language === 'ur' ? 'اپنا رول منتخب کریں' : 'Select Portal Role'}
+            </label>
+            <div className="grid grid-cols-4 gap-1.5 p-1 bg-gray-100/90 rounded-2xl border border-gray-200/60">
               <button
                 type="button"
                 onClick={() => handleSelectRole('customer')}
-                className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all text-center ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all ${
                   selectedRole === 'customer'
-                    ? 'bg-[#E11D74] text-white shadow-md shadow-pink-500/20 font-bold scale-102'
-                    : 'bg-white text-gray-700 border border-gray-200/80 hover:bg-pink-50 font-medium'
+                    ? 'bg-white text-[#E11D74] shadow-xs scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <User className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-xs">Customer</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  selectedRole === 'customer' ? 'bg-white/20 text-white' : 'text-gray-400'
-                }`}>Food Ordering</span>
+                <User className="w-4 h-4 mb-0.5" />
+                <span className="text-[11px]">Customer</span>
               </button>
 
-              {/* Vendor Tab */}
               <button
                 type="button"
                 onClick={() => handleSelectRole('vendor')}
-                className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all text-center ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all ${
                   selectedRole === 'vendor'
-                    ? 'bg-amber-600 text-white shadow-md shadow-amber-500/20 font-bold scale-102'
-                    : 'bg-white text-gray-700 border border-gray-200/80 hover:bg-amber-50 font-medium'
+                    ? 'bg-white text-amber-600 shadow-xs scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Store className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-xs">Vendor</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  selectedRole === 'vendor' ? 'bg-white/20 text-white' : 'text-gray-400'
-                }`}>Shop / Hotel</span>
+                <Store className="w-4 h-4 mb-0.5" />
+                <span className="text-[11px]">Vendor</span>
               </button>
 
-              {/* Rider Tab */}
               <button
                 type="button"
                 onClick={() => handleSelectRole('rider')}
-                className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all text-center ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all ${
                   selectedRole === 'rider'
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/20 font-bold scale-102'
-                    : 'bg-white text-gray-700 border border-gray-200/80 hover:bg-emerald-50 font-medium'
+                    ? 'bg-white text-emerald-600 shadow-xs scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Bike className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="text-xs">Rider</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  selectedRole === 'rider' ? 'bg-white/20 text-white' : 'text-gray-400'
-                }`}>Fleet Delivery</span>
+                <Bike className="w-4 h-4 mb-0.5" />
+                <span className="text-[11px]">Rider</span>
               </button>
 
-              {/* Admin Tab */}
               <button
                 type="button"
                 onClick={() => handleSelectRole('admin')}
-                className={`p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all text-center ${
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl text-xs font-bold transition-all ${
                   selectedRole === 'admin'
-                    ? 'bg-purple-800 text-white shadow-md shadow-purple-500/20 font-bold scale-102'
-                    : 'bg-white text-gray-700 border border-gray-200/80 hover:bg-purple-50 font-medium'
+                    ? 'bg-white text-purple-700 shadow-xs scale-[1.02]'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <ShieldAlert className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
-                <span className="text-xs">Super Admin</span>
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                  selectedRole === 'admin' ? 'bg-white/20 text-white' : 'text-gray-400'
-                }`}>Master Panel</span>
+                <ShieldAlert className="w-4 h-4 mb-0.5" />
+                <span className="text-[11px]">Admin</span>
               </button>
             </div>
           </div>
 
-          {/* Form Body */}
-          <div className="p-5 sm:p-6 space-y-4">
+          {/* Form Content */}
+          <div className="p-5 pt-4">
             
-            {/* Mode Switch (Sign In vs Register Account) */}
+            {/* Mode Switcher: Sign In vs Sign Up (Not available for Super Admin) */}
             {selectedRole !== 'admin' && (
-              <div className="flex items-center justify-between bg-pink-50/60 p-1.5 rounded-2xl border border-pink-100">
-                <div className="flex gap-1 w-full">
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('login'); setErrorMsg(''); }}
-                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
-                      authMode === 'login'
-                        ? 'bg-[#E11D74] text-white shadow-2xs'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    {language === 'ur' ? 'لاگ ان کریں' : 'Sign In'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setAuthMode('register'); setErrorMsg(''); }}
-                    className={`flex-1 py-1.5 rounded-xl text-xs font-bold transition-all text-center ${
-                      authMode === 'register'
-                        ? 'bg-[#E11D74] text-white shadow-2xs'
-                        : 'text-gray-600 hover:text-gray-900'
-                    }`}
-                  >
-                    {selectedRole === 'vendor' ? '+ Register Shop' : selectedRole === 'rider' ? '+ Register Rider' : '+ Create Account'}
-                  </button>
-                </div>
+              <div className="flex border-b border-gray-100 mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('login'); setErrorMsg(''); }}
+                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-all ${
+                    authMode === 'login' 
+                      ? 'border-[#E11D74] text-[#E11D74]' 
+                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {language === 'ur' ? 'سائن ان' : 'Sign In'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('register'); setErrorMsg(''); }}
+                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-all ${
+                    authMode === 'register' 
+                      ? 'border-[#E11D74] text-[#E11D74]' 
+                      : 'border-transparent text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {selectedRole === 'customer' && (language === 'ur' ? 'نیا اکاؤنٹ بنائیں' : 'Create Account')}
+                  {selectedRole === 'vendor' && (language === 'ur' ? 'دکان رجسٹر کریں' : 'Register Shop')}
+                  {selectedRole === 'rider' && (language === 'ur' ? 'رائیڈر بنیں' : 'Join as Rider')}
+                </button>
               </div>
             )}
 
-            {/* Error Banner */}
+            {/* Error Message Toast */}
             {errorMsg && (
               <motion.div
-                initial={{ opacity: 0, y: -5 }}
+                initial={{ opacity: 0, y: -6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs font-semibold flex items-center gap-2"
+                className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex items-start gap-2.5 text-xs text-red-700"
               >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="font-semibold">{errorMsg}</p>
               </motion.div>
             )}
 
             {/* Form */}
-            <form onSubmit={handleFormSubmit} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="space-y-3.5">
+              
               {authMode === 'login' ? (
                 <>
                   <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">
-                      {language === 'ur' ? 'ای میل، فون نمبر یا یوزر نیم' : 'Email, Phone Number or Username'}
-                      <span className="text-red-500 ml-1">*</span>
+                    <label className="text-xs font-bold text-gray-700 block mb-1.5 flex items-center justify-between">
+                      <span>
+                        {selectedRole === 'customer' && 'Email or Mobile Number'}
+                        {selectedRole === 'vendor' && 'Vendor Email or Phone'}
+                        {selectedRole === 'rider' && 'Rider Email or Phone'}
+                        {selectedRole === 'admin' && 'Admin Email / Username'}
+                      </span>
+                      <span className="text-[10px] text-red-500 font-bold">* Required</span>
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
+                      <Mail className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type="text"
                         value={identifier}
-                        onChange={(e) => { setIdentifier(e.target.value); setErrorMsg(''); }}
+                        onChange={(e) => setIdentifier(e.target.value)}
                         placeholder={
-                          selectedRole === 'admin' 
-                            ? 'Enter Admin email or username'
-                            : selectedRole === 'vendor'
-                            ? 'Enter Shop email or phone'
-                            : selectedRole === 'rider'
-                            ? 'Enter Rider mobile number'
-                            : 'Enter email or mobile number'
+                          selectedRole === 'customer' ? 'e.g. 0300-1234567 or customer@dastak.pk' :
+                          selectedRole === 'vendor' ? 'e.g. 0300-9876543 or vendor@dastak.pk' :
+                          selectedRole === 'rider' ? 'e.g. 0300-5555555 or rider@dastak.pk' :
+                          'admin@dastak.pk'
                         }
-                        className="w-full text-xs pl-9 pr-3 py-3 bg-gray-50/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E11D74] focus:bg-white"
+                        className="w-full text-xs sm:text-sm pl-10 pr-3.5 py-3 bg-gray-50/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] focus:border-transparent outline-none transition-all"
                         required
+                        autoComplete="username"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">
-                      {language === 'ur' ? 'پاس ورڈ' : 'Password'}
-                      <span className="text-red-500 ml-1">*</span>
+                    <label className="text-xs font-bold text-gray-700 block mb-1.5 flex items-center justify-between">
+                      <span>Password</span>
+                      <span className="text-[10px] text-red-500 font-bold">* Required</span>
                     </label>
                     <div className="relative">
-                      <KeyRound className="w-4 h-4 text-gray-400 absolute left-3 top-3.5" />
+                      <Lock className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={password}
-                        onChange={(e) => { setPassword(e.target.value); setErrorMsg(''); }}
-                        placeholder="••••••••"
-                        className="w-full text-xs pl-9 pr-10 py-3 bg-gray-50/80 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#E11D74] focus:bg-white"
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Enter your account password"
+                        className="w-full text-xs sm:text-sm pl-10 pr-10 py-3 bg-gray-50/80 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] focus:border-transparent outline-none transition-all"
                         required
+                        autoComplete="current-password"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                        title={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -476,22 +440,17 @@ export const LoginScreen: React.FC = () => {
 
                   <button
                     type="submit"
-                    className={`w-full py-3.5 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 mt-2 hover:opacity-95 ${
-                      selectedRole === 'admin'
-                        ? 'bg-purple-800 shadow-purple-500/20'
-                        : selectedRole === 'vendor'
-                        ? 'bg-amber-600 shadow-amber-500/20'
-                        : selectedRole === 'rider'
-                        ? 'bg-emerald-600 shadow-emerald-500/20'
-                        : 'bg-gradient-to-r from-[#E11D74] to-[#C2185B] shadow-pink-500/20'
-                    }`}
+                    disabled={isLoading}
+                    className="w-full py-3.5 bg-gradient-to-r from-[#E11D74] to-[#C2185B] hover:from-[#D81B60] hover:to-[#AD1457] text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-pink-500/20 transition-all flex items-center justify-center gap-2 mt-4 cursor-pointer disabled:opacity-50"
                   >
-                    <LogIn className="w-4 h-4" />
-                    <span>
-                      {language === 'ur'
-                        ? `${selectedRole.toUpperCase()} کے طور پر لاگ ان کریں`
-                        : `Sign In as ${selectedRole.toUpperCase()}`}
-                    </span>
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <LogIn className="w-4 h-4" />
+                        <span>Sign In to {selectedRole.toUpperCase()}</span>
+                      </>
+                    )}
                   </button>
                 </>
               ) : (
@@ -499,36 +458,34 @@ export const LoginScreen: React.FC = () => {
                 <div className="space-y-3">
                   {selectedRole === 'customer' && (
                     <>
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                          Full Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={regCustomerName}
+                          onChange={(e) => setRegCustomerName(e.target.value)}
+                          placeholder="e.g. Muhammad Hamza"
+                          className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                          required
+                        />
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="text-xs font-bold text-gray-700 block mb-1">
-                            Full Name <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={regCustomerName}
-                            onChange={(e) => setRegCustomerName(e.target.value)}
-                            placeholder="e.g. Asif Memon"
-                            className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="text-xs font-bold text-gray-700 block mb-1">
-                            Mobile / WhatsApp <span className="text-red-500">*</span>
+                            Mobile Number <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="tel"
                             value={regCustomerPhone}
                             onChange={(e) => setRegCustomerPhone(e.target.value)}
-                            placeholder="0300-1122334"
+                            placeholder="0300-1234567"
                             className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
                             required
                           />
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div>
                           <label className="text-xs font-bold text-gray-700 block mb-1">Matli Area</label>
                           <select
@@ -539,23 +496,24 @@ export const LoginScreen: React.FC = () => {
                             {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
                           </select>
                         </div>
-                        <div>
-                          <label className="text-xs font-bold text-gray-700 block mb-1">
-                            Choose Password <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="password"
-                            value={regCustomerPassword}
-                            onChange={(e) => setRegCustomerPassword(e.target.value)}
-                            placeholder="Create password"
-                            className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
-                            required
-                          />
-                        </div>
                       </div>
 
                       <div>
-                        <label className="text-xs font-bold text-gray-700 block mb-1">Street Address</label>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                          Create Password <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          value={regCustomerPassword}
+                          onChange={(e) => setRegCustomerPassword(e.target.value)}
+                          placeholder="At least 6 characters"
+                          className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">Delivery Address</label>
                         <input
                           type="text"
                           value={regCustomerAddress}
@@ -623,33 +581,63 @@ export const LoginScreen: React.FC = () => {
                           </select>
                         </div>
                       </div>
-                    </>
-                  )}
 
-                  {selectedRole === 'rider' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div>
                         <label className="text-xs font-bold text-gray-700 block mb-1">
-                          Rider Full Name <span className="text-red-500">*</span>
+                          Vendor Account Password <span className="text-red-500">*</span>
                         </label>
                         <input
-                          type="text"
-                          value={regRiderName}
-                          onChange={(e) => setRegRiderName(e.target.value)}
-                          placeholder="e.g. Zeeshan Ali"
+                          type="password"
+                          value={regShopPassword}
+                          onChange={(e) => setRegShopPassword(e.target.value)}
+                          placeholder="Password for vendor portal login"
                           className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
                           required
                         />
                       </div>
+                    </>
+                  )}
+
+                  {selectedRole === 'rider' && (
+                    <div className="space-y-2.5">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <label className="text-xs font-bold text-gray-700 block mb-1">
+                            Rider Full Name <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={regRiderName}
+                            onChange={(e) => setRegRiderName(e.target.value)}
+                            placeholder="e.g. Zeeshan Ali"
+                            className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-700 block mb-1">
+                            Phone Number <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="tel"
+                            value={regRiderPhone}
+                            onChange={(e) => setRegRiderPhone(e.target.value)}
+                            placeholder="0300-5555555"
+                            className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                            required
+                          />
+                        </div>
+                      </div>
+
                       <div>
                         <label className="text-xs font-bold text-gray-700 block mb-1">
-                          Phone Number <span className="text-red-500">*</span>
+                          Rider Account Password <span className="text-red-500">*</span>
                         </label>
                         <input
-                          type="tel"
-                          value={regRiderPhone}
-                          onChange={(e) => setRegRiderPhone(e.target.value)}
-                          placeholder="0300-5555555"
+                          type="password"
+                          value={regRiderPassword}
+                          onChange={(e) => setRegRiderPassword(e.target.value)}
+                          placeholder="Password for rider app login"
                           className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
                           required
                         />
@@ -659,10 +647,17 @@ export const LoginScreen: React.FC = () => {
 
                   <button
                     type="submit"
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 mt-2"
+                    disabled={isLoading}
+                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 mt-2 cursor-pointer disabled:opacity-50"
                   >
-                    <UserPlus className="w-4 h-4" />
-                    <span>Register & Open Dashboard</span>
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>Register & Open Dashboard</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
