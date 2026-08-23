@@ -1,0 +1,120 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile containing customer, vendor, rider, or admin data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["customer", "vendor", "rider", "admin"] },
+        "isBlocked": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "role"]
+    },
+    "Restaurant": {
+      "title": "Restaurant",
+      "description": "Vendor restaurant or grocery store in Matli",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "cuisine": { "type": "string" },
+        "rating": { "type": "number" },
+        "deliveryTime": { "type": "string" },
+        "isOpen": { "type": "boolean" },
+        "area": { "type": "string" }
+      },
+      "required": ["id", "name", "vendorId"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Food item or grocery product in catalog",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "restaurantId": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "isAvailable": { "type": "boolean" }
+      },
+      "required": ["id", "restaurantId", "name", "price"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Delivery order with items and live tracking state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "restaurantId": { "type": "string" },
+        "status": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "customerId", "restaurantId", "status", "totalAmount"]
+    },
+    "Rider": {
+      "title": "Rider",
+      "description": "Delivery personnel profile and active fleet status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "isAvailable": { "type": "boolean" },
+        "walletBalance": { "type": "number" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Platform configuration settings",
+      "type": "object",
+      "properties": {
+        "deliveryFee": { "type": "number" },
+        "taxPercentage": { "type": "number" },
+        "isPlatformOpen": { "type": "boolean" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and customer records"
+    },
+    "/restaurants/{restaurantId}": {
+      "schema": "Restaurant",
+      "description": "Restaurants and vendors directory"
+    },
+    "/menuItems/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Catalog food and grocery items"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Live and completed customer delivery orders"
+    },
+    "/riders/{riderId}": {
+      "schema": "Rider",
+      "description": "Registered delivery fleet riders"
+    },
+    "/settings/{settingId}": {
+      "schema": "PlatformSettings",
+      "description": "Dastak system and commission settings"
+    },
+    "/promos/{promoId}": {
+      "schema": "object",
+      "description": "Promotional banners and discounts"
+    },
+    "/categories/{categoryId}": {
+      "schema": "object",
+      "description": "Food and shopping categories"
+    }
+  }
+}

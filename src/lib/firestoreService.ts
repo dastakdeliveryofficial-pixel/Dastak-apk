@@ -160,31 +160,86 @@ export async function logoutFirebaseUser(): Promise<void> {
   await signOut(auth);
 }
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
+}
+
 // 3. Realtime Orders Listeners & Actions
 export function subscribeToOrders(onUpdate: (orders: Order[]) => void) {
   const q = query(collection(db, ORDERS_COLLECTION), orderBy('createdAt', 'desc'));
-  return onSnapshot(q, (snapshot) => {
-    const ordersList: Order[] = [];
-    snapshot.forEach((docSnap) => {
-      ordersList.push({ ...(docSnap.data() as Order), id: docSnap.id });
-    });
-    onUpdate(ordersList);
-  }, (err) => {
-    console.error('Firestore order subscription error:', err);
-  });
+  return onSnapshot(
+    q, 
+    (snapshot) => {
+      const ordersList: Order[] = [];
+      snapshot.forEach((docSnap) => {
+        ordersList.push({ ...(docSnap.data() as Order), id: docSnap.id });
+      });
+      onUpdate(ordersList);
+    }, 
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, ORDERS_COLLECTION);
+    }
+  );
 }
 
 export async function createFirestoreOrder(orderData: Omit<Order, 'id'>): Promise<Order> {
-  const docRef = await addDoc(collection(db, ORDERS_COLLECTION), {
-    ...orderData,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  });
+  try {
+    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), {
+      ...orderData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
 
-  return {
-    ...orderData,
-    id: docRef.id
-  };
+    return {
+      ...orderData,
+      id: docRef.id
+    };
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, ORDERS_COLLECTION);
+    throw err;
+  }
 }
 
 export async function updateFirestoreOrderStatus(
@@ -195,57 +250,86 @@ export async function updateFirestoreOrderStatus(
   riderPhone?: string,
   cancelReason?: string
 ) {
-  const orderRef = doc(db, ORDERS_COLLECTION, orderId);
-  const updates: Partial<Order> = {
-    status,
-    updatedAt: new Date().toISOString()
-  };
+  try {
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    const updates: Partial<Order> = {
+      status,
+      updatedAt: new Date().toISOString()
+    };
 
-  if (riderId) updates.riderId = riderId;
-  if (riderName) updates.riderName = riderName;
-  if (riderPhone) updates.riderPhone = riderPhone;
-  if (cancelReason) updates.cancelReason = cancelReason;
+    if (riderId) updates.riderId = riderId;
+    if (riderName) updates.riderName = riderName;
+    if (riderPhone) updates.riderPhone = riderPhone;
+    if (cancelReason) updates.cancelReason = cancelReason;
 
-  await updateDoc(orderRef, updates);
+    await updateDoc(orderRef, updates);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${ORDERS_COLLECTION}/${orderId}`);
+    throw err;
+  }
 }
 
 // 4. Realtime Restaurants, Menu, & Riders
 export function subscribeToRestaurants(onUpdate: (restaurants: Restaurant[]) => void) {
-  return onSnapshot(collection(db, RESTAURANTS_COLLECTION), (snapshot) => {
-    const list: Restaurant[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as Restaurant), id: docSnap.id });
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, RESTAURANTS_COLLECTION), 
+    (snapshot) => {
+      const list: Restaurant[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ ...(docSnap.data() as Restaurant), id: docSnap.id });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, RESTAURANTS_COLLECTION);
+    }
+  );
 }
 
 export function subscribeToMenuItems(onUpdate: (items: MenuItem[]) => void) {
-  return onSnapshot(collection(db, MENU_ITEMS_COLLECTION), (snapshot) => {
-    const list: MenuItem[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as MenuItem), id: docSnap.id });
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, MENU_ITEMS_COLLECTION), 
+    (snapshot) => {
+      const list: MenuItem[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ ...(docSnap.data() as MenuItem), id: docSnap.id });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, MENU_ITEMS_COLLECTION);
+    }
+  );
 }
 
 export function subscribeToRiders(onUpdate: (riders: Rider[]) => void) {
-  return onSnapshot(collection(db, RIDERS_COLLECTION), (snapshot) => {
-    const list: Rider[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as Rider), id: docSnap.id });
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, RIDERS_COLLECTION), 
+    (snapshot) => {
+      const list: Rider[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ ...(docSnap.data() as Rider), id: docSnap.id });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, RIDERS_COLLECTION);
+    }
+  );
 }
 
 export function subscribeToUsers(onUpdate: (users: User[]) => void) {
-  return onSnapshot(collection(db, USERS_COLLECTION), (snapshot) => {
-    const list: User[] = [];
-    snapshot.forEach((docSnap) => {
-      list.push({ ...(docSnap.data() as User), id: docSnap.id });
-    });
-    onUpdate(list);
-  });
+  return onSnapshot(
+    collection(db, USERS_COLLECTION), 
+    (snapshot) => {
+      const list: User[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ ...(docSnap.data() as User), id: docSnap.id });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, USERS_COLLECTION);
+    }
+  );
 }

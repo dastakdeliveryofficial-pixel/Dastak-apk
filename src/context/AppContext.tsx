@@ -15,6 +15,7 @@ import {
   auth, 
   db, 
   doc, 
+  getDoc,
   setDoc, 
   addDoc, 
   updateDoc, 
@@ -258,8 +259,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getCategoryName = (cat: Category) => getLocalizedName(cat, language);
   const getPromoContent = (promo: BannerPromo) => getLocalizedPromo(promo, language);
 
-  const [currentRole, setCurrentRole] = useState<UserRole>('customer');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  // Initial Auth Session Loader from localStorage
+  const getInitialAuthSession = () => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.isAuthenticated && parsed.currentUser) {
+          return {
+            isAuthenticated: true,
+            currentUser: parsed.currentUser as User,
+            currentRole: (parsed.currentRole || parsed.currentUser.role || 'customer') as UserRole,
+            activeVendorRestaurantId: (parsed.activeVendorRestaurantId || 'rest-1') as string,
+            activeRiderId: (parsed.activeRiderId || 'rider-1') as string
+          };
+        }
+      }
+    } catch (e) {
+      console.error('Error restoring auth session:', e);
+    }
+    return {
+      isAuthenticated: false,
+      currentUser: INITIAL_CUSTOMERS[0],
+      currentRole: 'customer' as UserRole,
+      activeVendorRestaurantId: 'rest-1',
+      activeRiderId: 'rider-1'
+    };
+  };
+
+  const initialSession = getInitialAuthSession();
+
+  const [currentRole, setCurrentRoleState] = useState<UserRole>(initialSession.currentRole);
+  const [isAuthenticated, setIsAuthenticatedState] = useState<boolean>(initialSession.isAuthenticated);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalRole, setAuthModalRole] = useState<UserRole>('customer');
 
@@ -268,8 +299,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem(LOCAL_STORAGE_KEY + '_rider_privacy') === 'true';
   });
 
-  const [activeVendorRestaurantId, setActiveVendorRestaurantId] = useState<string>('rest-1');
-  const [activeRiderId, setActiveRiderId] = useState<string>('rider-1');
+  const [activeVendorRestaurantId, setActiveVendorRestaurantIdState] = useState<string>(initialSession.activeVendorRestaurantId);
+  const [activeRiderId, setActiveRiderIdState] = useState<string>(initialSession.activeRiderId);
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -286,7 +317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Core Persistent State
   const [allUsers, setAllUsers] = useState<User[]>(INITIAL_CUSTOMERS);
-  const [currentUser, setCurrentUser] = useState<User>(INITIAL_CUSTOMERS[0]);
+  const [currentUser, setCurrentUserState] = useState<User>(initialSession.currentUser);
   const [restaurants, setRestaurants] = useState<Restaurant[]>(INITIAL_RESTAURANTS);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
@@ -294,6 +325,76 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(BANNER_PROMOS);
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(INITIAL_SETTINGS);
+
+  // Session Synchronization helper
+  const syncAuthSession = (
+    authed: boolean,
+    user: User,
+    role: UserRole,
+    vendorRestId?: string,
+    riderId?: string
+  ) => {
+    setIsAuthenticatedState(authed);
+    setCurrentUserState(user);
+    setCurrentRoleState(role);
+    if (vendorRestId) setActiveVendorRestaurantIdState(vendorRestId);
+    if (riderId) setActiveRiderIdState(riderId);
+
+    if (authed) {
+      try {
+        const payload = {
+          isAuthenticated: true,
+          currentUser: user,
+          currentRole: role,
+          activeVendorRestaurantId: vendorRestId || activeVendorRestaurantId,
+          activeRiderId: riderId || activeRiderId
+        };
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(payload));
+      } catch (e) {
+        console.error('Failed to save session to localStorage:', e);
+      }
+    } else {
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_auth_session');
+      } catch {}
+    }
+  };
+
+  const setCurrentRole = (role: UserRole) => {
+    setCurrentRoleState(role);
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.currentRole = role;
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
+      }
+    } catch {}
+  };
+
+  const setActiveVendorRestaurantId = (id: string) => {
+    setActiveVendorRestaurantIdState(id);
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.activeVendorRestaurantId = id;
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
+      }
+    } catch {}
+  };
+
+  const setActiveRiderId = (id: string) => {
+    setActiveRiderIdState(id);
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.activeRiderId = id;
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
+      }
+    } catch {}
+  };
 
   const [cart, setCart] = useState<CartState>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_cart');
@@ -347,13 +448,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // Listen to Firebase Auth state
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        setIsAuthenticated(true);
-        const matched = allUsers.find(u => u.id === firebaseUser.uid || u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
-        if (matched) {
-          setCurrentUser(matched);
-          setCurrentRole(matched.role);
+        try {
+          const userDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
+          let resolvedUser: User;
+          if (userDocSnap.exists()) {
+            resolvedUser = userDocSnap.data() as User;
+          } else {
+            const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+            if (saved) {
+              resolvedUser = JSON.parse(saved).currentUser;
+            } else {
+              resolvedUser = {
+                id: firebaseUser.uid,
+                name: firebaseUser.displayName || (firebaseUser.email?.split('@')[0] ?? 'Matli Customer'),
+                email: firebaseUser.email || `${firebaseUser.uid}@dastak.pk`,
+                phone: firebaseUser.phoneNumber || '0300-1234567',
+                role: (firebaseUser.email?.includes('admin') ? 'admin' : firebaseUser.email?.includes('vendor') ? 'vendor' : firebaseUser.email?.includes('rider') ? 'rider' : 'customer') as UserRole,
+                addresses: [],
+                isBlocked: false,
+                createdAt: new Date().toISOString()
+              };
+            }
+          }
+          syncAuthSession(true, resolvedUser, resolvedUser.role);
+        } catch (err) {
+          console.error('Error checking auth user profile:', err);
         }
       }
     });
@@ -867,12 +988,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setBannerPromos(prev => prev.filter(p => p.id !== id));
   };
 
+  const setCurrentUser = (user: User) => {
+    setCurrentUserState(user);
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        parsed.currentUser = user;
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
+      }
+    } catch {}
+  };
+
+  const setIsAuthenticated = (authVal: boolean) => {
+    setIsAuthenticatedState(authVal);
+    try {
+      if (!authVal) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_auth_session');
+      } else {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          parsed.isAuthenticated = true;
+          localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
+        }
+      }
+    } catch {}
+  };
+
   // Real Email/Password Auth System
   const loginWithEmailPassword = async (email: string, pass: string, role?: UserRole) => {
     const user = await loginFirebaseUser(email, pass);
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-    setCurrentRole(role || user.role);
+    const targetRole = role || user.role;
+    let vendorRestId: string | undefined;
+    let riderId: string | undefined;
+
+    if (targetRole === 'vendor') {
+      const rest = restaurants.find(r => r.vendorId === user.id);
+      if (rest) vendorRestId = rest.id;
+    } else if (targetRole === 'rider') {
+      const rd = riders.find(r => r.userId === user.id);
+      if (rd) riderId = rd.id;
+    }
+
+    syncAuthSession(true, user, targetRole, vendorRestId, riderId);
     setIsAuthModalOpen(false);
     triggerToast('Welcome Back!', `Logged in successfully as ${user.name || user.email}`, 'success');
   };
@@ -905,15 +1064,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addresses: userAddresses
     });
 
-    setCurrentUser(user);
-    setIsAuthenticated(true);
-    setCurrentRole(data.role);
+    let vendorRestId: string | undefined;
+    let riderId: string | undefined;
 
     // If vendor role, create restaurant record in Firestore
     if (data.role === 'vendor' && data.shopName) {
-      const restId = 'rest-' + Date.now();
+      vendorRestId = 'rest-' + Date.now();
       const newRest: Restaurant = {
-        id: restId,
+        id: vendorRestId,
         vendorId: user.id,
         name: data.shopName,
         image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
@@ -935,10 +1093,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalRevenue: 0,
         isApproved: true
       };
-      await setDoc(doc(db, 'restaurants', restId), newRest);
-      setActiveVendorRestaurantId(restId);
+      await setDoc(doc(db, 'restaurants', vendorRestId), newRest);
     } else if (data.role === 'rider') {
-      const riderId = 'rider-' + Date.now();
+      riderId = 'rider-' + Date.now();
       const newRider: Rider = {
         id: riderId,
         userId: user.id,
@@ -958,9 +1115,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         walletBalance: 0
       };
       await setDoc(doc(db, 'riders', riderId), newRider);
-      setActiveRiderId(riderId);
     }
 
+    syncAuthSession(true, user, data.role, vendorRestId, riderId);
     setIsAuthModalOpen(false);
     sounds.playOrderSuccess();
     try {
@@ -981,15 +1138,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginUser = (emailOrPhone: string, role: UserRole, extra?: { name?: string; restaurantId?: string; riderId?: string }) => {
-    setIsAuthenticated(true);
-    setCurrentRole(role);
-
+    let targetUser: User;
     if (role === 'customer') {
-      const existingUser = allUsers.find(u => u.email === emailOrPhone || u.phone === emailOrPhone);
+      const existingUser = allUsers.find(u => u.email.toLowerCase() === emailOrPhone.toLowerCase() || u.phone === emailOrPhone);
       if (existingUser) {
-        setCurrentUser(existingUser);
+        targetUser = existingUser;
       } else {
-        const newUser: User = {
+        targetUser = {
           id: 'user-' + Date.now(),
           name: extra?.name || (emailOrPhone.includes('@') ? emailOrPhone.split('@')[0] : 'Matli Customer'),
           phone: emailOrPhone.includes('@') ? '0300-1234567' : emailOrPhone,
@@ -999,13 +1154,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isBlocked: false,
           createdAt: new Date().toISOString()
         };
-        setCurrentUser(newUser);
       }
-    } else if (role === 'vendor') {
-      if (extra?.restaurantId) setActiveVendorRestaurantId(extra.restaurantId);
-    } else if (role === 'rider') {
-      if (extra?.riderId) setActiveRiderId(extra.riderId);
+    } else {
+      targetUser = {
+        id: 'usr-' + role + '-' + Date.now(),
+        name: extra?.name || (role === 'vendor' ? 'Haji Rashid' : role === 'rider' ? 'Zeeshan Ali' : 'Super Admin'),
+        email: emailOrPhone.includes('@') ? emailOrPhone : `${role}@dastak.pk`,
+        phone: '0300-1234567',
+        role: role,
+        addresses: [],
+        isBlocked: false,
+        createdAt: new Date().toISOString()
+      };
     }
+
+    syncAuthSession(true, targetUser, role, extra?.restaurantId, extra?.riderId);
     setIsAuthModalOpen(false);
   };
 
@@ -1051,8 +1214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBlocked: false,
         createdAt: new Date().toISOString()
       };
-      setCurrentUser(fallbackUser);
-      setIsAuthenticated(true);
+      syncAuthSession(true, fallbackUser, 'customer');
       return fallbackUser;
     }
   };
@@ -1180,9 +1342,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await logoutFirebaseUser();
     } catch {}
-    setIsAuthenticated(false);
-    setCurrentRole('customer');
-    triggerToast('Logged Out', 'Signed out from Firebase successfully.', 'info');
+    syncAuthSession(false, INITIAL_CUSTOMERS[0], 'customer');
+    triggerToast('Logged Out', 'Signed out from Dastak Delivery.', 'info');
   };
 
   const handleSetAllowRiderViewCustomerInfo = (val: boolean) => {

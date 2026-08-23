@@ -10,67 +10,54 @@ service cloud.firestore {
     // Helper function to check if user is admin
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-         request.auth.token.email == 'admin@dastakdelivery.pk' ||
-         request.auth.token.email == 'admin@dastak.pk');
+        (request.auth.token.email == 'admin@dastakdelivery.pk' ||
+         request.auth.token.email == 'admin@dastak.pk' ||
+         request.auth.token.email == 'mahboobniz.ma.47@gmail.com');
     }
 
     // Users collection
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Restaurants / Vendors collection
     match /restaurants/{restaurantId} {
-      allow read: if true; // Publicly readable for menus and browsing
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (
-        resource.data.vendorId == request.auth.uid || 
-        resource.data.ownerId == request.auth.uid || 
-        isAdmin()
-      );
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Menu Items collection
     match /menuItems/{itemId} {
-      allow read: if true;
-      allow create, update, delete: if isAuthenticated();
+      allow read, write: if true;
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read, write: if true;
     }
 
     // Orders collection
     match /orders/{orderId} {
-      // Customers can read their own orders, vendors see their store orders, riders see assigned or pending orders, admin sees all
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // Riders collection
     match /riders/{riderId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Platform settings & promos
+    // Platform settings
     match /settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
+    // Promotional banners
     match /promos/{promoId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
+    // Customer support & order chats
     match /chats/{chatId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if true;
     }
   }
 }
