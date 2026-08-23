@@ -96,7 +96,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
-  const handleCheckoutStandard = () => {
+  const handleCheckoutStandard = async () => {
     const addr = getEffectiveAddress();
     if (!addr) return;
 
@@ -105,27 +105,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       return;
     }
 
-    const order = placeOrder(addr, paymentMethod);
-    onClose();
-    onOrderPlaced(order.id);
+    try {
+      const order = await placeOrder(addr, paymentMethod);
+      onClose();
+      if (order && order.id) {
+        onOrderPlaced(order.id);
+      }
+    } catch (e) {
+      console.error('Error placing order:', e);
+    }
   };
 
-  const handleCheckoutWhatsApp = () => {
+  const handleCheckoutWhatsApp = async () => {
     const addr = getEffectiveAddress();
     if (!addr) return;
 
-    // First place order locally to register state
-    const order = placeOrder(addr, paymentMethod);
-    
-    // Generate WhatsApp bill message
-    const message = generateWhatsAppOrderMessage(order, 'vendor');
-    
-    // Target restaurant phone or platform support phone
-    const targetPhone = currentRestaurant?.whatsappNumber || platformSettings.supportWhatsApp;
-    openWhatsAppChat(targetPhone, message);
+    try {
+      // First place order locally to register state
+      const order = await placeOrder(addr, paymentMethod);
+      
+      // Generate WhatsApp bill message
+      const message = generateWhatsAppOrderMessage(order, 'vendor');
+      
+      // Target restaurant phone or platform support phone
+      const targetPhone = currentRestaurant?.whatsappNumber || platformSettings.supportWhatsApp;
+      openWhatsAppChat(targetPhone, message);
 
-    onClose();
-    onOrderPlaced(order.id);
+      onClose();
+      if (order && order.id) {
+        onOrderPlaced(order.id);
+      }
+    } catch (e) {
+      console.error('Error placing order via WhatsApp:', e);
+    }
   };
 
 

@@ -12,17 +12,23 @@ import { openWhatsAppChat } from '../../utils/whatsapp';
 interface CustomerHomeProps {
   onSelectRestaurant: (restaurant: Restaurant) => void;
   onOpenCart: () => void;
+  onTrackOrder?: (orderId: string) => void;
+  onOpenHistory?: () => void;
 }
 
 export const CustomerHome: React.FC<CustomerHomeProps> = ({
   onSelectRestaurant,
-  onOpenCart
+  onOpenCart,
+  onTrackOrder,
+  onOpenHistory
 }) => {
   const { 
     restaurants, 
     categories, 
     bannerPromos, 
     menuItems, 
+    orders,
+    currentUser,
     selectedCategory, 
     setSelectedCategory, 
     searchQuery, 
@@ -43,6 +49,12 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'top_rated' | 'low_fee' | 'deals'>('all');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Active customer order for live tracking
+  const activeOrder = orders.find(
+    o => (o.customerId === currentUser?.id || (currentUser?.phone && o.customerPhone === currentUser?.phone)) &&
+         o.status !== 'delivered' && o.status !== 'cancelled'
+  );
 
   // Filter restaurants
   const filteredRestaurants = restaurants.filter(restaurant => {
@@ -123,6 +135,51 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Active Order Live Tracking Banner */}
+          {activeOrder && (
+            <motion.div
+              initial={{ y: -8, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              onClick={() => onTrackOrder && onTrackOrder(activeOrder.id)}
+              className="bg-gradient-to-r from-[#E11D74] via-[#D81B60] to-[#AD1457] text-white p-3.5 sm:p-4 rounded-2xl shadow-lg border border-pink-300 flex items-center justify-between gap-3 cursor-pointer hover:opacity-95 transition-all"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center font-bold shrink-0 border border-white/30">
+                  <Bike className="w-5 h-5 text-white animate-pulse" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="bg-white text-[#E11D74] text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-2xs">
+                      Live Order #{activeOrder.orderNumber}
+                    </span>
+                    <span className="text-[11px] font-bold text-pink-100 uppercase tracking-wider">
+                      Status: <strong className="text-white capitalize">{activeOrder.status.replace(/_/g, ' ')}</strong>
+                    </span>
+                  </div>
+                  <h4 className="font-black text-xs sm:text-sm text-white truncate mt-0.5">
+                    {activeOrder.restaurantName} • ₨ {activeOrder.total}
+                  </h4>
+                  <span className="text-[10px] sm:text-[11px] text-pink-100 block truncate">
+                    Est. Time: {activeOrder.estimatedDeliveryTime || '20-30 min'} • Tap to view live rider map & tracking
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onTrackOrder) onTrackOrder(activeOrder.id);
+                  }}
+                  className="bg-white text-[#E11D74] font-black text-xs px-3.5 py-2 rounded-xl shadow-xs hover:bg-pink-50 transition-colors flex items-center gap-1"
+                >
+                  <span>Track Live</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
 
           {/* Search Input Bar */}
           <div className="relative pt-1">

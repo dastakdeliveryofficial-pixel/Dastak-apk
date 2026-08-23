@@ -84,6 +84,8 @@ const MainAppContent: React.FC = () => {
             <CustomerHome
               onSelectRestaurant={handleOpenRestaurant}
               onOpenCart={() => setIsCartOpen(true)}
+              onTrackOrder={handleTrackOrderFromHistory}
+              onOpenHistory={() => setIsHistoryOpen(true)}
             />
           )
         )}

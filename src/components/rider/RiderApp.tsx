@@ -536,28 +536,61 @@ export const RiderApp: React.FC = () => {
 
             {/* Delivery History */}
             <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-gray-900">
-                Completed Trips History
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-gray-900">
+                  Completed Deliveries History ({completedOrders.length})
+                </h3>
+                <span className="text-xs text-emerald-600 font-bold">
+                  Total Earned: ₨ {completedOrders.reduce((sum, o) => sum + (o.deliveryFee || 60), 0).toLocaleString()}
+                </span>
+              </div>
 
               {completedOrders.length === 0 ? (
-                <p className="text-xs text-gray-400">No completed deliveries yet today.</p>
+                <div className="text-center py-8 bg-gray-50 rounded-xl border border-gray-100">
+                  <Bike className="w-8 h-8 text-gray-300 mx-auto mb-1" />
+                  <p className="text-xs text-gray-400">No completed deliveries recorded yet.</p>
+                </div>
               ) : (
-                <div className="space-y-2">
-                  {completedOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between text-xs"
-                    >
-                      <div>
-                        <span className="font-bold text-gray-900">Order #{order.orderNumber}</span>
-                        <span className="text-gray-400 text-[11px] block">
-                          {order.restaurantName} → {order.deliveryAddress.area}
-                        </span>
+                <div className="space-y-2.5">
+                  {completedOrders.map((order) => {
+                    const timeStr = new Date(order.createdAt).toLocaleDateString('en-PK', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    });
+
+                    return (
+                      <div
+                        key={order.id}
+                        className="p-3 bg-gray-50 hover:bg-gray-100/80 transition-colors rounded-xl border border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                      >
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900">Order #{order.orderNumber}</span>
+                            <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.2 rounded-full">
+                              Delivered ✓
+                            </span>
+                          </div>
+                          <span className="text-gray-500 text-[11px] block">
+                            <strong>{order.restaurantName}</strong> → {order.deliveryAddress.streetAddress}, {order.deliveryAddress.area}
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            {timeStr} • Total Bill: ₨ {order.total} ({order.paymentMethod.toUpperCase()})
+                          </span>
+                        </div>
+
+                        <div className="text-right flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-1.5 sm:pt-0 border-gray-200">
+                          <span className="text-xs font-black text-emerald-600">
+                            + ₨ {order.deliveryFee || 60} Earned
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            Cash Collected: ₨ {order.total}
+                          </span>
+                        </div>
                       </div>
-                      <span className="font-bold text-emerald-600">+ ₨ {order.deliveryFee || 60}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
