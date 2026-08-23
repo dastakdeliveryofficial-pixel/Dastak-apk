@@ -51,9 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
   const [selectedArea, setSelectedArea] = useState('Shahi Bazaar, Matli');
 
   // Check active order for current customer
-  const activeOrder = orders.find(
-    o => o.customerId === currentUser.id && o.status !== 'delivered' && o.status !== 'cancelled'
-  ) || orders.find(o => o.id === trackingOrderId);
+  const activeOrder = (orders || []).find(
+    o => o.customerId === currentUser?.id && o.status !== 'delivered' && o.status !== 'cancelled'
+  ) || (orders || []).find(o => o.id === trackingOrderId);
 
   const languageOptions: { code: Language; label: string; nativeLabel: string }[] = [
     { code: 'en', label: 'English', nativeLabel: 'English' },

@@ -17,7 +17,7 @@ export const LoginScreen: React.FC = () => {
     registerCustomerAccount,
     registerNewVendor,
     registerRider,
-    registeredCustomers,
+    allUsers,
     restaurants,
     riders,
     triggerToast,
@@ -199,11 +199,13 @@ export const LoginScreen: React.FC = () => {
     const validCustomerPass = ['customer123', 'customer', '123456', '1234'];
 
     const isDefaultCustomer = validCustomerIds.includes(cleanId) && validCustomerPass.includes(cleanPass);
-    const registeredCust = registeredCustomers.find(
-      c => c.phone.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '') || (c.email && c.email.toLowerCase() === cleanId)
+    const registeredCust = (allUsers || []).find(
+      c => (c.phone && c.phone.replace(/[^0-9]/g, '') === cleanId.replace(/[^0-9]/g, '')) || 
+           (c.email && c.email.toLowerCase() === cleanId) ||
+           (c.name && c.name.toLowerCase() === cleanId)
     );
 
-    if (isDefaultCustomer || (registeredCust && cleanPass === registeredCust.password) || (cleanPass.length >= 4 && cleanId.length >= 3)) {
+    if (isDefaultCustomer || (registeredCust && cleanPass.length >= 4) || (cleanPass.length >= 4 && cleanId.length >= 3)) {
       loginUser(cleanId, 'customer', {
         name: registeredCust ? registeredCust.name : isDefaultCustomer ? 'Matli Customer' : cleanId
       });
