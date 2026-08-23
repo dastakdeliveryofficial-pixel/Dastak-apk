@@ -1,24 +1,56 @@
 {
+  "id": "/?source=pwa",
   "name": "Dastak Delivery Matli | دستک ڈیلیوری",
   "short_name": "Dastak",
-  "description": "Fast Food, Biryani & Grocery Delivery in Matli, Sindh",
+  "description": "Fast Food, Biryani, Karahi & Grocery Delivery in Matli, Sindh. Order now from top restaurants with fast doorstep delivery.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
   "background_color": "#FFF5F8",
   "theme_color": "#E11D74",
   "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["food", "shopping", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/vite.svg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Explore Restaurants",
+      "short_name": "Food Menu",
+      "description": "Browse Matli restaurants & menus",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Track Order",
+      "short_name": "Track",
+      "description": "Track active food order status",
+      "url": "/",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Dastak Delivery Mobile Interface"
     }
   ]
 }
