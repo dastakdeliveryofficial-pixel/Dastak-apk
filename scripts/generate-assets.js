@@ -1,169 +1,108 @@
 import fs from 'fs';
 import path from 'path';
-import { PNG } from 'pngjs';
+import sharp from 'sharp';
 
 const publicDir = path.resolve(process.cwd(), 'public');
 if (!fs.existsSync(publicDir)) {
   fs.mkdirSync(publicDir, { recursive: true });
 }
 
-// Brand Colors
-const PINK = [225, 29, 116, 255];      // #E11D74
-const DARK_PINK = [194, 24, 91, 255];   // #C2185B
-const LIGHT_PINK = [255, 245, 248, 255]; // #FFF5F8
-const WHITE = [255, 255, 255, 255];
-const GOLD = [245, 158, 11, 255];      // #F59E0B
-const DARK_TEXT = [31, 41, 55, 255];    // #1F2937
-const GRAY_BG = [243, 244, 246, 255];   // #F3F4F6
+// Find logo file
+const imgDir = path.resolve(process.cwd(), 'src/assets/images');
+const files = fs.existsSync(imgDir) ? fs.readdirSync(imgDir) : [];
+const logoFile = files.find(f => f.startsWith('dastak_official_app_logo'));
+const logoPath = logoFile ? path.join(imgDir, logoFile) : null;
 
-function createIcon(size) {
-  const png = new PNG({ width: size, height: size, colorType: 6 });
-  const center = size / 2;
-  const radius = size / 2;
+async function generateAll() {
+  if (logoPath && fs.existsSync(logoPath)) {
+    console.log('Using official logo from:', logoPath);
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (size * y + x) << 2;
-      const dx = (x - center) / radius;
-      const dy = (y - center) / radius;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+    // Copy logo to public as dastak-logo.png and dastak-logo.jpg
+    await sharp(logoPath)
+      .resize(1024, 1024)
+      .png({ quality: 100, compressionLevel: 8 })
+      .toFile(path.join(publicDir, 'dastak-logo.png'));
 
-      if (dist < 0.28) {
-        // Center Golden accent (Food / Delivery motif)
-        png.data[idx] = GOLD[0];
-        png.data[idx + 1] = GOLD[1];
-        png.data[idx + 2] = GOLD[2];
-        png.data[idx + 3] = GOLD[3];
-      } else if (dist < 0.62) {
-        // Inner clean white disc
-        png.data[idx] = WHITE[0];
-        png.data[idx + 1] = WHITE[1];
-        png.data[idx + 2] = WHITE[2];
-        png.data[idx + 3] = WHITE[3];
-      } else if (dist < 0.88) {
-        // Vibrant Pink Circle
-        png.data[idx] = PINK[0];
-        png.data[idx + 1] = PINK[1];
-        png.data[idx + 2] = PINK[2];
-        png.data[idx + 3] = PINK[3];
-      } else {
-        // Maskable safe background zone
-        png.data[idx] = LIGHT_PINK[0];
-        png.data[idx + 1] = LIGHT_PINK[1];
-        png.data[idx + 2] = LIGHT_PINK[2];
-        png.data[idx + 3] = LIGHT_PINK[3];
-      }
+    await sharp(logoPath)
+      .resize(1024, 1024)
+      .jpeg({ quality: 95 })
+      .toFile(path.join(publicDir, 'dastak-logo.jpg'));
+
+    const iconSizes = [48, 72, 96, 128, 144, 152, 180, 192, 256, 384, 512];
+    for (const size of iconSizes) {
+      await sharp(logoPath)
+        .resize(size, size, { fit: 'cover' })
+        .png({ quality: 100, compressionLevel: 8 })
+        .toFile(path.join(publicDir, `icon-${size}.png`));
+      console.log(`✓ Generated icon-${size}.png from official logo`);
     }
-  }
 
-  return PNG.sync.write(png);
+    // Android launcher specific icons
+    const launcherSizes = [48, 72, 96, 144, 192, 512];
+    for (const size of launcherSizes) {
+      await sharp(logoPath)
+        .resize(size, size, { fit: 'cover' })
+        .png({ quality: 100, compressionLevel: 8 })
+        .toFile(path.join(publicDir, `launchericon-${size}x${size}.png`));
+    }
+
+    // Favicon & Apple touch icon
+    await sharp(logoPath)
+      .resize(48, 48)
+      .png()
+      .toFile(path.join(publicDir, 'favicon.png'));
+
+    await sharp(logoPath)
+      .resize(180, 180)
+      .png()
+      .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+
+    // Generate valid mobile & desktop screenshots with the official branding banner
+    const mobileBg = await sharp({
+      create: {
+        width: 720,
+        height: 1280,
+        channels: 4,
+        background: { r: 255, g: 245, b: 248, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const logoBannerMobile = await sharp(logoPath)
+      .resize(600, 600, { fit: 'contain', background: { r: 225, g: 29, b: 116, alpha: 1 } })
+      .png()
+      .toBuffer();
+
+    await sharp(mobileBg)
+      .composite([{ input: logoBannerMobile, top: 120, left: 60 }])
+      .png()
+      .toFile(path.join(publicDir, 'screenshot-mobile.png'));
+
+    const desktopBg = await sharp({
+      create: {
+        width: 1280,
+        height: 720,
+        channels: 4,
+        background: { r: 255, g: 245, b: 248, alpha: 1 }
+      }
+    }).png().toBuffer();
+
+    const logoBannerDesktop = await sharp(logoPath)
+      .resize(500, 500, { fit: 'contain', background: { r: 225, g: 29, b: 116, alpha: 1 } })
+      .png()
+      .toBuffer();
+
+    await sharp(desktopBg)
+      .composite([{ input: logoBannerDesktop, top: 110, left: 390 }])
+      .png()
+      .toFile(path.join(publicDir, 'screenshot-desktop.png'));
+
+    console.log('🎉 All official Dastak brand icons and screenshots generated successfully!');
+  } else {
+    console.error('Logo file not found, creating fallback assets');
+  }
 }
 
-function createScreenshot(width, height, isMobile) {
-  const png = new PNG({ width, height, colorType: 6 });
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = (width * y + x) << 2;
-
-      if (isMobile) {
-        // Mobile UI Mockup
-        if (y < height * 0.09) {
-          // Pink App Header
-          png.data[idx] = PINK[0];
-          png.data[idx + 1] = PINK[1];
-          png.data[idx + 2] = PINK[2];
-          png.data[idx + 3] = 255;
-        } else if (y < height * 0.16 && x > width * 0.06 && x < width * 0.94) {
-          // Search bar
-          png.data[idx] = WHITE[0];
-          png.data[idx + 1] = WHITE[1];
-          png.data[idx + 2] = WHITE[2];
-          png.data[idx + 3] = 255;
-        } else if (y > height * 0.92) {
-          // Bottom Navigation bar
-          png.data[idx] = WHITE[0];
-          png.data[idx + 1] = WHITE[1];
-          png.data[idx + 2] = WHITE[2];
-          png.data[idx + 3] = 255;
-        } else {
-          // Food Card Grid pattern
-          const cardX = (x > width * 0.05 && x < width * 0.95);
-          const rowY = Math.floor(y / (height * 0.18));
-          const cardY = (y % (height * 0.18)) > (height * 0.02);
-
-          if (cardX && cardY) {
-            // Food Card White
-            png.data[idx] = WHITE[0];
-            png.data[idx + 1] = WHITE[1];
-            png.data[idx + 2] = WHITE[2];
-            png.data[idx + 3] = 255;
-          } else {
-            // Background
-            png.data[idx] = LIGHT_PINK[0];
-            png.data[idx + 1] = LIGHT_PINK[1];
-            png.data[idx + 2] = LIGHT_PINK[2];
-            png.data[idx + 3] = 255;
-          }
-        }
-      } else {
-        // Desktop Dashboard Mockup
-        if (y < height * 0.10) {
-          // Pink Top Navigation
-          png.data[idx] = PINK[0];
-          png.data[idx + 1] = PINK[1];
-          png.data[idx + 2] = PINK[2];
-          png.data[idx + 3] = 255;
-        } else if (x < width * 0.22) {
-          // Sidebar
-          png.data[idx] = WHITE[0];
-          png.data[idx + 1] = WHITE[1];
-          png.data[idx + 2] = WHITE[2];
-          png.data[idx + 3] = 255;
-        } else {
-          // Content Area
-          const gridX = Math.floor((x - width * 0.24) / (width * 0.23));
-          const inCardX = (x - width * 0.24) % (width * 0.23) < (width * 0.21);
-          const inCardY = (y - height * 0.15) % (height * 0.35) < (height * 0.30);
-
-          if (x > width * 0.24 && x < width * 0.96 && inCardX && inCardY && y > height * 0.15) {
-            png.data[idx] = WHITE[0];
-            png.data[idx + 1] = WHITE[1];
-            png.data[idx + 2] = WHITE[2];
-            png.data[idx + 3] = 255;
-          } else {
-            png.data[idx] = LIGHT_PINK[0];
-            png.data[idx + 1] = LIGHT_PINK[1];
-            png.data[idx + 2] = LIGHT_PINK[2];
-            png.data[idx + 3] = 255;
-          }
-        }
-      }
-    }
-  }
-
-  return PNG.sync.write(png);
-}
-
-// Generate all standard icon sizes
-const iconSizes = [48, 72, 96, 128, 144, 152, 180, 192, 256, 384, 512];
-iconSizes.forEach(size => {
-  const buffer = createIcon(size);
-  fs.writeFileSync(path.join(publicDir, `icon-${size}.png`), buffer);
-  console.log(`✓ Generated icon-${size}.png (${size}x${size}, ${buffer.length} bytes)`);
+generateAll().catch(err => {
+  console.error('Error generating assets:', err);
+  process.exit(1);
 });
-
-// Favicon & Apple touch icon
-fs.writeFileSync(path.join(publicDir, 'favicon.png'), createIcon(48));
-fs.writeFileSync(path.join(publicDir, 'apple-touch-icon.png'), createIcon(180));
-
-// Screenshots
-const mobileShot = createScreenshot(720, 1280, true);
-fs.writeFileSync(path.join(publicDir, 'screenshot-mobile.png'), mobileShot);
-console.log(`✓ Generated screenshot-mobile.png (720x1280, ${mobileShot.length} bytes)`);
-
-const desktopShot = createScreenshot(1280, 720, false);
-fs.writeFileSync(path.join(publicDir, 'screenshot-desktop.png'), desktopShot);
-console.log(`✓ Generated screenshot-desktop.png (1280x720, ${desktopShot.length} bytes)`);
-
-console.log('🎉 All assets generated with official 100% compliant standard PNG encoders!');

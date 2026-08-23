@@ -26,6 +26,7 @@ export const VendorDashboard: React.FC = () => {
     updateMenuItem,
     deleteMenuItem,
     toggleMenuItemAvailability,
+    openLoginModal,
     triggerToast
   } = useApp();
 
@@ -169,7 +170,7 @@ export const VendorDashboard: React.FC = () => {
 
           {/* Quick Controls: Switch Hotel & Open/Closed Status Toggle */}
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Restaurant Selector */}
+            {/* Restaurant Selector & Add Shop */}
             <div className="bg-gray-50 p-1 rounded-xl border border-gray-200 flex items-center gap-2">
               <span className="text-xs text-gray-500 pl-2 font-medium">Switch Kitchen:</span>
               <select
@@ -183,6 +184,14 @@ export const VendorDashboard: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => openLoginModal('vendor')}
+                className="text-xs bg-[#E11D74] text-white px-2.5 py-1.5 rounded-lg font-bold hover:bg-[#C2185B] transition-colors"
+                title="Register a new Shop / Hotel ID in Matli"
+              >
+                + Add Shop ID
+              </button>
             </div>
 
             {/* Store Open/Close Switch */}

@@ -49,6 +49,32 @@ interface AppContextType {
   setAuthModalRole: (role: UserRole) => void;
   openLoginModal: (role?: UserRole) => void;
   loginUser: (emailOrPhone: string, role: UserRole, extra?: { name?: string; restaurantId?: string; riderId?: string }) => void;
+  registerCustomerAccount: (data: { name: string; phone: string; email?: string; password?: string; address?: string; area?: string }) => User;
+  registerNewVendor: (vendorData: {
+    name: string;
+    nameUrdu?: string;
+    ownerName: string;
+    phone: string;
+    whatsappNumber: string;
+    address: string;
+    area: string;
+    categories: string[];
+    minOrder?: number;
+    deliveryFee?: number;
+    deliveryTime?: string;
+    openingHours?: string;
+    image?: string;
+    description?: string;
+    password?: string;
+  }) => { restaurantId: string; vendorId: string; restaurant: Restaurant };
+  registerRider: (riderData: {
+    name: string;
+    phone: string;
+    cnicNumber: string;
+    vehicleType: 'bike' | 'loader' | 'bicycle';
+    vehiclePlateNumber: string;
+    currentArea: string;
+  }) => Rider;
   logoutUser: () => void;
 
   // Privacy & Permissions
@@ -898,6 +924,199 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAuthModalOpen(false);
   };
 
+  const registerCustomerAccount = (data: { 
+    name: string; 
+    phone: string; 
+    email?: string; 
+    password?: string; 
+    address?: string; 
+    area?: string;
+  }): User => {
+    const userId = 'user-' + Date.now();
+    const cleanPhone = data.phone.trim();
+    const userEmail = data.email?.trim() || `${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
+
+    const userAddresses: Address[] = data.address ? [{
+      id: 'addr-' + Date.now(),
+      label: 'Home',
+      area: data.area || 'Shahi Bazaar, Matli',
+      streetAddress: data.address,
+      phone: cleanPhone,
+      isDefault: true
+    }] : [];
+
+    const newUser: User = {
+      id: userId,
+      name: data.name.trim(),
+      phone: cleanPhone,
+      email: userEmail,
+      role: 'customer',
+      addresses: userAddresses,
+      isBlocked: false,
+      createdAt: new Date().toISOString()
+    };
+
+    setAllUsers(prev => [newUser, ...prev]);
+    setCurrentUser(newUser);
+    setIsAuthenticated(true);
+    setCurrentRole('customer');
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'customer');
+    } catch {}
+
+    setIsAuthModalOpen(false);
+    sounds.playOrderSuccess();
+    try {
+      confetti({ particleCount: 60, spread: 60, origin: { y: 0.6 } });
+    } catch {}
+    triggerToast('Account Created!', `Welcome to Dastak Delivery, ${newUser.name}!`, 'success');
+    return newUser;
+  };
+
+  const registerNewVendor = (vendorData: {
+    name: string;
+    nameUrdu?: string;
+    ownerName: string;
+    phone: string;
+    whatsappNumber: string;
+    address: string;
+    area: string;
+    categories: string[];
+    minOrder?: number;
+    deliveryFee?: number;
+    deliveryTime?: string;
+    openingHours?: string;
+    image?: string;
+    description?: string;
+    password?: string;
+  }): { restaurantId: string; vendorId: string; restaurant: Restaurant } => {
+    const timestamp = Date.now();
+    const restaurantId = 'rest-' + timestamp;
+    const vendorId = 'vnd-' + Math.floor(1000 + Math.random() * 9000);
+
+    const defaultImage = vendorData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80';
+
+    const newRestaurant: Restaurant = {
+      id: restaurantId,
+      vendorId: vendorId,
+      name: vendorData.name.trim(),
+      nameUrdu: vendorData.nameUrdu?.trim() || vendorData.name.trim(),
+      image: defaultImage,
+      categories: vendorData.categories.length > 0 ? vendorData.categories : ['Fast Food', 'Biryani'],
+      rating: 5.0,
+      reviewsCount: 1,
+      isOpen: true,
+      deliveryTime: vendorData.deliveryTime || '20-30 min',
+      minOrder: vendorData.minOrder || 150,
+      deliveryFee: vendorData.deliveryFee || 50,
+      address: vendorData.address || `${vendorData.area}, Matli`,
+      area: vendorData.area || 'Shahi Bazaar',
+      phone: vendorData.phone,
+      whatsappNumber: vendorData.whatsappNumber || vendorData.phone,
+      description: vendorData.description || `Specialty food & delicacies from ${vendorData.name}, Matli.`,
+      descriptionUrdu: `دستک پر ${vendorData.name} کا اسپیشل مینیو۔ تیز ہوم ڈلیوری۔`,
+      commissionRate: 10,
+      openingHours: vendorData.openingHours || '11:00 AM - 12:00 AM',
+      totalOrdersCount: 0,
+      totalRevenue: 0,
+      isApproved: true
+    };
+
+    // Add 2 default sample menu items for the new shop so they have instant products
+    const initialItems: MenuItem[] = [
+      {
+        id: 'item-' + timestamp + '-1',
+        restaurantId: restaurantId,
+        name: `${vendorData.name} Special Item 1`,
+        nameUrdu: `${vendorData.name} اسپیشل ڈش`,
+        description: 'Fresh and hygienic preparation with authentic taste in Matli.',
+        price: 280,
+        image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&auto=format&fit=crop&q=80',
+        category: vendorData.categories[0] || 'Fast Food',
+        isAvailable: true,
+        preparationTime: '15 min'
+      },
+      {
+        id: 'item-' + timestamp + '-2',
+        restaurantId: restaurantId,
+        name: `${vendorData.name} Deal / Drink Combo`,
+        nameUrdu: 'اسپیشل ڈیل مع کولڈ ڈرنک',
+        description: 'Special combo deal with chilled beverage.',
+        price: 450,
+        discountedPrice: 399,
+        image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80',
+        category: vendorData.categories[0] || 'Fast Food',
+        isAvailable: true,
+        isCombo: true,
+        preparationTime: '20 min'
+      }
+    ];
+
+    setRestaurants(prev => [newRestaurant, ...prev]);
+    setMenuItems(prev => [...initialItems, ...prev]);
+    setActiveVendorRestaurantId(restaurantId);
+    setCurrentRole('vendor');
+    setIsAuthenticated(true);
+
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'vendor');
+    } catch {}
+
+    setIsAuthModalOpen(false);
+    sounds.playOrderSuccess();
+    try {
+      confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
+    } catch {}
+
+    triggerToast('Shop Registered! 🏪', `Vendor ID: ${vendorId.toUpperCase()} created for ${newRestaurant.name}!`, 'success');
+    return { restaurantId, vendorId, restaurant: newRestaurant };
+  };
+
+  const registerRider = (riderData: {
+    name: string;
+    phone: string;
+    cnicNumber: string;
+    vehicleType: 'bike' | 'loader' | 'bicycle';
+    vehiclePlateNumber: string;
+    currentArea: string;
+  }): Rider => {
+    const riderId = 'rider-' + Date.now();
+    const newRider: Rider = {
+      id: riderId,
+      userId: 'user-rd-' + Date.now(),
+      name: riderData.name.trim(),
+      phone: riderData.phone.trim(),
+      vehicleType: riderData.vehicleType,
+      vehiclePlateNumber: riderData.vehiclePlateNumber || 'KHI-XXXX',
+      cnicNumber: riderData.cnicNumber || '41103-XXXXXXX-1',
+      isOnline: true,
+      isVerified: true,
+      currentArea: riderData.currentArea || 'Shahi Bazaar',
+      totalDeliveries: 0,
+      rating: 5.0,
+      earningsToday: 0,
+      earningsWeekly: 0,
+      totalEarnings: 0,
+      walletBalance: 0
+    };
+
+    setRiders(prev => [newRider, ...prev]);
+    setActiveRiderId(riderId);
+    setCurrentRole('rider');
+    setIsAuthenticated(true);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_auth', 'true');
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_role', 'rider');
+    } catch {}
+
+    setIsAuthModalOpen(false);
+    sounds.playOrderSuccess();
+    triggerToast('Rider Registered! 🛵', `Welcome ${newRider.name} to Dastak Matli Delivery Fleet!`, 'success');
+    return newRider;
+  };
+
   const logoutUser = () => {
     setIsAuthenticated(false);
     setCurrentRole('customer');
@@ -1002,6 +1221,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAuthModalRole,
         openLoginModal,
         loginUser,
+        registerCustomerAccount,
+        registerNewVendor,
+        registerRider,
         logoutUser,
         allowRiderViewCustomerInfo,
         setAllowRiderViewCustomerInfo: handleSetAllowRiderViewCustomerInfo,

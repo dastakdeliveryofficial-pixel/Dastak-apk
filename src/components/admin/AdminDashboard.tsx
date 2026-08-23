@@ -27,6 +27,7 @@ export const AdminDashboard: React.FC = () => {
     adminAddNewProduct,
     adminUpdateProduct,
     adminDeleteProduct,
+    registerNewVendor,
     allowRiderViewCustomerInfo,
     setAllowRiderViewCustomerInfo,
     openAloChat,
@@ -137,6 +138,28 @@ export const AdminDashboard: React.FC = () => {
     ]);
     setNewPromoCode('');
     triggerToast('Promo Created', `Promo voucher ${newPromoCode.toUpperCase()} activated for Matli`, 'success');
+  };
+
+  const handleAddVendorSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newVendorName.trim()) {
+      triggerToast('Required', 'Please enter Restaurant name', 'warning');
+      return;
+    }
+    const created = registerNewVendor({
+      name: newVendorName.trim(),
+      ownerName: 'Manager',
+      phone: newVendorPhone || '0300-1122334',
+      whatsappNumber: newVendorPhone || '0300-1122334',
+      address: `${newVendorArea}, Matli`,
+      area: newVendorArea,
+      categories: ['Fast Food', 'Biryani']
+    });
+    if (newVendorCommission && created.restaurantId) {
+      updateRestaurantDetails(created.restaurantId, { commissionRate: Number(newVendorCommission) });
+    }
+    setIsAddVendorOpen(false);
+    setNewVendorName('');
   };
 
   const filteredMenuItems = selectedProductRestId === 'all'
@@ -764,9 +787,85 @@ export const AdminDashboard: React.FC = () => {
                 className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors self-start sm:self-auto"
               >
                 <Plus className="w-4 h-4" />
-                <span>Add Restaurant</span>
+                <span>{isAddVendorOpen ? 'Close Form' : 'Add Restaurant'}</span>
               </button>
             </div>
+
+            {/* Add Vendor Form */}
+            <AnimatePresence>
+              {isAddVendorOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="bg-white rounded-3xl p-5 border border-pink-200 shadow-md overflow-hidden"
+                >
+                  <h4 className="font-bold text-sm text-gray-900 mb-3 flex items-center gap-2">
+                    <Store className="w-4 h-4 text-[#E11D74]" />
+                    <span>Register New Matli Restaurant Partner</span>
+                  </h4>
+                  <form onSubmit={handleAddVendorSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Restaurant Name</label>
+                      <input
+                        type="text"
+                        value={newVendorName}
+                        onChange={(e) => setNewVendorName(e.target.value)}
+                        placeholder="e.g. Matli Royal Biryani"
+                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Matli Market Area</label>
+                      <select
+                        value={newVendorArea}
+                        onChange={(e) => setNewVendorArea(e.target.value)}
+                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                      >
+                        {MATLI_AREAS.map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Phone / WhatsApp</label>
+                      <input
+                        type="tel"
+                        value={newVendorPhone}
+                        onChange={(e) => setNewVendorPhone(e.target.value)}
+                        placeholder="0300-1122334"
+                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                      />
+                    </div>
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Platform Commission (%)</label>
+                      <input
+                        type="number"
+                        value={newVendorCommission}
+                        onChange={(e) => setNewVendorCommission(Number(e.target.value))}
+                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsAddVendorOpen(false)}
+                        className="px-4 py-2 border border-gray-200 rounded-xl text-gray-600 font-bold hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold px-5 py-2 rounded-xl shadow-xs transition-colors"
+                      >
+                        Register Restaurant & Create Vendor ID
+                      </button>
+                    </div>
+                  </form>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Vendor Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

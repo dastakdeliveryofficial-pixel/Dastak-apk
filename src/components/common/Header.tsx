@@ -76,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleRoleSelect = (role: UserRole) => {
     if (role === 'admin') {
-      loginUser('admin@dastakdelivery.pk', 'admin', 'admin');
+      loginUser('admin@dastakdelivery.pk', 'admin', { name: 'Super Admin Matli' });
       setCurrentRole('admin');
       triggerToast('Super Admin Active', 'Switched to Super Admin Console', 'success');
     } else {
