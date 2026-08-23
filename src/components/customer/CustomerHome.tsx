@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { 
   Search, Star, Clock, ShoppingBag, Flame, Sparkles, 
-  MapPin, Percent, ChevronRight, Check, Utensils, MessageCircle 
+  MapPin, Percent, ChevronRight, Check, Utensils, MessageCircle,
+  Store, Bike, KeyRound, UserPlus
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem } from '../../types';
@@ -28,6 +29,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     setSearchQuery,
     addToCart,
     applyPromoCode,
+    openLoginModal,
     triggerToast,
     language,
     t,
@@ -523,6 +525,66 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
               })}
             </div>
           )}
+
+          {/* Partner & Portal Onboarding Cards */}
+          <div className="mt-12 pt-8 border-t border-pink-100 grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-3xl p-5 text-white shadow-md flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full inline-block mb-2">
+                  Customer Portal
+                </span>
+                <h4 className="text-base font-bold">Sign In or Create Account</h4>
+                <p className="text-xs text-pink-100 mt-1">
+                  Save addresses in Matli, track orders live, and view order history.
+                </p>
+              </div>
+              <button
+                onClick={() => openLoginModal('customer')}
+                className="mt-4 w-full py-2.5 bg-white text-[#E11D74] font-bold rounded-xl text-xs hover:bg-pink-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Customer Login / Register</span>
+              </button>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-500 to-amber-700 rounded-3xl p-5 text-white shadow-md flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full inline-block mb-2">
+                  Hotel & Shop Owners
+                </span>
+                <h4 className="text-base font-bold">Register Your Shop in Matli</h4>
+                <p className="text-xs text-amber-100 mt-1">
+                  Get your own Shop ID, upload food items, set prices & receive instant orders.
+                </p>
+              </div>
+              <button
+                onClick={() => openLoginModal('vendor')}
+                className="mt-4 w-full py-2.5 bg-white text-amber-800 font-bold rounded-xl text-xs hover:bg-amber-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <Store className="w-4 h-4" />
+                <span>Vendor Login & + Add Shop ID</span>
+              </button>
+            </div>
+
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-800 rounded-3xl p-5 text-white shadow-md flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-widest bg-white/20 px-2.5 py-0.5 rounded-full inline-block mb-2">
+                  Delivery Fleet
+                </span>
+                <h4 className="text-base font-bold">Join as a Matli Rider</h4>
+                <p className="text-xs text-emerald-100 mt-1">
+                  Deliver food with your motorcycle or loader in Matli and earn daily income.
+                </p>
+              </div>
+              <button
+                onClick={() => openLoginModal('rider')}
+                className="mt-4 w-full py-2.5 bg-white text-emerald-800 font-bold rounded-xl text-xs hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <Bike className="w-4 h-4" />
+                <span>Rider Sign In / Register</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

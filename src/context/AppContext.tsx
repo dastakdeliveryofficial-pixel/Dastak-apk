@@ -218,9 +218,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getPromoContent = (promo: BannerPromo) => getLocalizedPromo(promo, language);
 
   const [currentRole, setCurrentRole] = useState<UserRole>('customer');
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_KEY + '_auth') === 'true';
-  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalRole, setAuthModalRole] = useState<UserRole>('customer');
 

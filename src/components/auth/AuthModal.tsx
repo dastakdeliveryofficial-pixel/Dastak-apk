@@ -27,6 +27,12 @@ export const AuthModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<UserRole>(authModalRole || 'customer');
 
+  React.useEffect(() => {
+    if (authModalRole) {
+      setActiveTab(authModalRole);
+    }
+  }, [authModalRole, isAuthModalOpen]);
+
   // Customer State
   const [isCustomerSignUp, setIsCustomerSignUp] = useState(false);
   const [customerName, setCustomerName] = useState('');
@@ -156,10 +162,14 @@ export const AuthModal: React.FC = () => {
   // 4. Admin Handlers
   const handleAdminSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPassword === 'admin123' || adminPassword === '1234' || adminPassword === 'admin' || !adminPassword) {
+    if (!adminPassword.trim()) {
+      setAdminError('Please enter the Super Admin password.');
+      return;
+    }
+    if (adminPassword === 'admin123' || adminPassword === 'adminpass2026') {
       loginUser('admin@dastakdelivery.pk', 'admin');
     } else {
-      setAdminError('Invalid password. Default is "admin123" or leave blank for demo.');
+      setAdminError('Invalid password for Super Admin.');
     }
   };
 
@@ -586,11 +596,10 @@ export const AuthModal: React.FC = () => {
                         type="password"
                         value={adminPassword}
                         onChange={(e) => { setAdminPassword(e.target.value); setAdminError(''); }}
-                        placeholder="Enter Admin Password (e.g. admin123)"
+                        placeholder="Enter Admin Password"
                         className="w-full text-xs pl-9 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-gray-900"
                       />
                     </div>
-                    <span className="text-[10px] text-gray-400 mt-1 block">Default password: <strong>admin123</strong> (or click below)</span>
                   </div>
 
                   <button

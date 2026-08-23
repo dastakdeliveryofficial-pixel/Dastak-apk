@@ -9,6 +9,8 @@ import { OrderTrackingView } from './components/customer/OrderTrackingView';
 import { OrderHistoryModal } from './components/customer/OrderHistoryModal';
 import { AddressManagementModal } from './components/customer/AddressManagementModal';
 import { ApkDownloadModal } from './components/common/ApkDownloadModal';
+import { AuthModal } from './components/auth/AuthModal';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { VendorDashboard } from './components/vendor/VendorDashboard';
 import { RiderApp } from './components/rider/RiderApp';
 import { AdminDashboard } from './components/admin/AdminDashboard';
@@ -17,7 +19,7 @@ import { MessageCircle, Smartphone, ShieldAlert } from 'lucide-react';
 import { openWhatsAppChat } from './utils/whatsapp';
 
 const MainAppContent: React.FC = () => {
-  const { currentRole, setCurrentRole, loginUser, platformSettings, language, setLanguage, t, triggerToast } = useApp();
+  const { currentRole, setCurrentRole, isAuthenticated, loginUser, platformSettings, language, setLanguage, t, triggerToast } = useApp();
 
   // Modals & Navigation state
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
@@ -42,11 +44,15 @@ const MainAppContent: React.FC = () => {
     setActiveTrackingOrderId(orderId);
   };
 
-  const handleSwitchToAdmin = () => {
-    loginUser('admin@dastakdelivery.pk', 'admin', 'admin');
-    setCurrentRole('admin');
-    triggerToast('Super Admin Active', 'Switched to Super Admin Console', 'success');
-  };
+  // If not authenticated, always show the full-screen Login & Role Selection portal first
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginScreen />
+        <ToastContainer />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#FFF5F8] text-[#1F2937] flex flex-col font-sans selection:bg-[#E11D74] selection:text-white w-full max-w-full overflow-x-hidden">
@@ -131,14 +137,6 @@ const MainAppContent: React.FC = () => {
             </button>
           </div>
 
-          <button
-            onClick={handleSwitchToAdmin}
-            className="text-purple-700 hover:text-purple-900 font-bold flex items-center gap-1 hover:underline"
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-purple-600" />
-            <span>👑 Super Admin Console</span>
-          </button>
-
           <span className="text-[#E11D74] font-bold flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             Matli Live Support Active
@@ -173,6 +171,9 @@ const MainAppContent: React.FC = () => {
         isOpen={isApkModalOpen}
         onClose={() => setIsApkModalOpen(false)}
       />
+
+      {/* Authentication & Role ID Login Modal */}
+      <AuthModal />
 
       {/* WhatsApp Quick Support Floating Action Button */}
       <div className="fixed bottom-5 right-5 z-40">

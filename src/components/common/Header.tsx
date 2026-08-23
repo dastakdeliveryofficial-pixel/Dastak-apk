@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   ShoppingBag, MapPin, ChevronDown, User, Clock, Globe, Check,
-  LogIn, LogOut, KeyRound, ShieldAlert, Sparkles, Store, Bike,
+  LogIn, LogOut, KeyRound, ShieldAlert, Store, Bike,
   Smartphone, Download, ShieldCheck
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
@@ -26,14 +26,9 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { 
     currentRole, 
-    setCurrentRole, 
     currentUser, 
-    isAuthenticated,
-    loginUser,
-    openLoginModal,
     logoutUser,
     cartItemCount, 
-    cartTotal, 
     orders, 
     trackingOrderId,
     setTrackingOrderId,
@@ -46,7 +41,6 @@ export const Header: React.FC<HeaderProps> = ({
     setActiveRiderId,
     language,
     setLanguage,
-    triggerToast,
     t,
     getRestaurantName
   } = useApp();
@@ -61,29 +55,11 @@ export const Header: React.FC<HeaderProps> = ({
     o => o.customerId === currentUser.id && o.status !== 'delivered' && o.status !== 'cancelled'
   ) || orders.find(o => o.id === trackingOrderId);
 
-  const roles: { id: UserRole; short: string; label: string; bgClass: string; textClass: string; activeClass: string }[] = [
-    { id: 'customer', short: 'C', label: t.customer, bgClass: 'bg-pink-100', textClass: 'text-[#E11D74]', activeClass: 'ring-2 ring-[#E11D74] bg-pink-50 text-[#E11D74]' },
-    { id: 'vendor', short: 'V', label: t.vendor, bgClass: 'bg-amber-100', textClass: 'text-amber-700', activeClass: 'ring-2 ring-amber-500 bg-amber-50 text-amber-700' },
-    { id: 'rider', short: 'R', label: t.rider, bgClass: 'bg-emerald-100', textClass: 'text-emerald-700', activeClass: 'ring-2 ring-emerald-500 bg-emerald-50 text-emerald-700' },
-    { id: 'admin', short: 'A', label: t.admin, bgClass: 'bg-purple-100', textClass: 'text-purple-700', activeClass: 'ring-2 ring-purple-600 bg-purple-50 text-purple-800' }
-  ];
-
   const languageOptions: { code: Language; label: string; nativeLabel: string }[] = [
     { code: 'en', label: 'English', nativeLabel: 'English' },
     { code: 'ur', label: 'Urdu', nativeLabel: 'اردو' },
     { code: 'sd', label: 'Sindhi', nativeLabel: 'سنڌي' }
   ];
-
-  const handleRoleSelect = (role: UserRole) => {
-    if (role === 'admin') {
-      loginUser('admin@dastakdelivery.pk', 'admin', { name: 'Super Admin Matli' });
-      setCurrentRole('admin');
-      triggerToast('Super Admin Active', 'Switched to Super Admin Console', 'success');
-    } else {
-      setCurrentRole(role);
-    }
-  };
-
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-pink-100 shadow-xs w-full max-w-full overflow-hidden">
@@ -91,12 +67,9 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Logo */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => setCurrentRole('customer')}
-            className="flex items-center gap-2 text-left group"
-          >
+          <div className="flex items-center gap-2 text-left">
             <DastakLogo size="sm" showText={true} />
-          </button>
+          </div>
 
           {/* Delivery Location Selector (Customer View) */}
           {currentRole === 'customer' && (
@@ -129,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({
                             : 'text-gray-700 hover:bg-pink-50/50'
                         }`}
                       >
-                        <MapPin className="w-3 h-3 text-[#E11D74] shrink-0" />
+                        <MapPin className="w-3.5 h-3.5 text-[#E11D74] shrink-0" />
                         <span className="truncate">{area}</span>
                       </button>
                     ))}
@@ -139,14 +112,14 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )}
 
-          {/* Vendor Active Store Switcher */}
+          {/* Vendor Active Shop Selector */}
           {currentRole === 'vendor' && (
             <div className="hidden md:flex items-center gap-2 ml-3 pl-3 border-l border-pink-100">
               <span className="text-xs text-gray-400 font-bold uppercase tracking-wider text-[10px]">{t.vendor}:</span>
               <select
                 value={activeVendorRestaurantId}
                 onChange={(e) => setActiveVendorRestaurantId(e.target.value)}
-                className="text-xs font-semibold bg-pink-50/50 border border-pink-200 rounded-lg px-2.5 py-1.5 text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                className="text-xs font-semibold bg-amber-50/60 border border-amber-200 rounded-lg px-2.5 py-1.5 text-gray-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
               >
                 {restaurants.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -176,33 +149,31 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Right Actions: Role Selector Avatars, Tracker & Cart */}
+        {/* Right Actions: Logged-in Role Badge, Logout, Tracker & Cart */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-          {/* Overlapping Clean Role Switcher Avatars */}
-          <div className="flex items-center gap-1 bg-pink-50/70 border border-pink-200/80 p-0.5 sm:px-2 sm:py-1 rounded-full">
-            <div className="flex -space-x-1.5 sm:-space-x-2 items-center">
-              {roles.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => handleRoleSelect(r.id)}
-                  title={`Switch to ${r.label}`}
-                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full ${r.bgClass} border-2 border-white flex items-center justify-center text-[9px] sm:text-[10px] font-bold ${r.textClass} transition-transform hover:scale-110 hover:z-10 ${
-                    currentRole === r.id ? 'ring-2 ring-[#E11D74] scale-105 z-10' : 'opacity-80'
-                  }`}
-                >
-                  {r.short}
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => openLoginModal(currentRole)}
-              className="text-[11px] font-bold text-pink-900 pr-1 hover:text-[#E11D74] hidden md:flex items-center gap-1 capitalize"
-              title="Click to open login portal"
-            >
-              <span>{roles.find(r => r.id === currentRole)?.label}</span>
-              <KeyRound className="w-3 h-3 opacity-60" />
-            </button>
+          
+          {/* Active Role Badge */}
+          <div className="flex items-center gap-1.5 bg-pink-50/80 border border-pink-200/80 px-2.5 sm:px-3 py-1.5 rounded-xl shadow-2xs">
+            {currentRole === 'customer' && <User className="w-3.5 h-3.5 text-[#E11D74]" />}
+            {currentRole === 'vendor' && <Store className="w-3.5 h-3.5 text-amber-700" />}
+            {currentRole === 'rider' && <Bike className="w-3.5 h-3.5 text-emerald-700" />}
+            {currentRole === 'admin' && <ShieldAlert className="w-3.5 h-3.5 text-purple-700" />}
+            <span className="text-xs font-bold text-gray-800 capitalize">
+              {currentRole === 'admin' ? 'Super Admin' : currentRole === 'customer' ? t.customer : currentRole === 'vendor' ? t.vendor : t.rider}
+            </span>
           </div>
+
+          {/* Quick Logout Button */}
+          <button
+            onClick={() => logoutUser()}
+            className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs px-2.5 sm:px-3 py-1.5 rounded-xl transition-all shadow-2xs hover:shadow-xs"
+            title="Log Out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">
+              {language === 'ur' ? 'لاگ آؤٹ' : language === 'sd' ? 'لاگ آئوٽ' : 'Logout'}
+            </span>
+          </button>
 
           {/* Active Order Live Tracker Pill */}
           {currentRole === 'customer' && activeOrder && (
@@ -246,55 +217,73 @@ export const Header: React.FC<HeaderProps> = ({
               <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">{t.cart}</span>
               {cartItemCount > 0 && (
-                <span className="bg-amber-300 text-pink-950 px-1.5 py-0.2 rounded-full text-[10px] font-black">
+                <span className="bg-white text-[#E11D74] text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
                   {cartItemCount}
                 </span>
               )}
             </button>
           )}
 
-          {/* User Account / Profile Button */}
+          {/* Language Selector Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsLanguageMenuOpen(!isLanguageMenuOpen)}
+              className="flex items-center gap-1 p-2 rounded-xl border border-pink-200/80 bg-white/80 hover:bg-pink-50 text-gray-700 text-xs font-bold transition-colors"
+              title="Change Language"
+            >
+              <Globe className="w-4 h-4 text-[#E11D74]" />
+              <span className="uppercase text-[11px]">{language}</span>
+            </button>
+
+            {isLanguageMenuOpen && (
+              <div className="absolute right-0 mt-2 w-36 bg-white rounded-2xl shadow-xl border border-pink-100 p-1.5 z-50">
+                {languageOptions.map((l) => (
+                  <button
+                    key={l.code}
+                    onClick={() => {
+                      setLanguage(l.code);
+                      setIsLanguageMenuOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between transition-colors ${
+                      language === l.code
+                        ? 'bg-pink-50 text-[#E11D74] font-bold'
+                        : 'text-gray-700 hover:bg-pink-50/50'
+                    }`}
+                  >
+                    <span>{l.nativeLabel}</span>
+                    {language === l.code && <Check className="w-3.5 h-3.5 text-[#E11D74]" />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Mobile More / Profile Dropdown Menu */}
           <div className="relative">
             <button
               onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-pink-50/80 border border-pink-200 flex items-center justify-center text-pink-800 hover:bg-pink-100 transition-colors"
-              title="Account & Settings"
+              className="flex items-center gap-1 p-2 rounded-xl border border-pink-200/80 bg-white/80 hover:bg-pink-50 text-gray-700 text-xs transition-colors"
             >
-              <User className="w-4 h-4" />
+              <User className="w-4 h-4 text-[#E11D74]" />
+              <ChevronDown className="w-3 h-3 text-gray-400" />
             </button>
 
             {isProfileMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-60 bg-white rounded-2xl shadow-xl border border-pink-100 p-3 z-50">
+              <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-pink-100 p-3 z-50">
                 <div className="pb-2 border-b border-pink-100 flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-gray-900">{currentUser.name}</p>
-                    <p className="text-[11px] text-gray-500">{currentUser.phone}</p>
-                    <span className="inline-block mt-1 text-[10px] uppercase font-bold px-2 py-0.5 bg-pink-50 text-[#E11D74] rounded border border-pink-200">
-                      Role: {currentRole}
-                    </span>
+                    <p className="font-bold text-xs text-gray-800">{currentUser.name}</p>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">{currentRole}</p>
                   </div>
-                  {isAuthenticated ? (
-                    <button
-                      onClick={() => {
-                        logoutUser();
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                      title="Log Out"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        openLoginModal(currentRole);
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="text-xs font-bold bg-[#E11D74] text-white px-2.5 py-1 rounded-lg hover:bg-[#C2185B]"
-                    >
-                      Login
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      logoutUser();
+                    }}
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg"
+                  >
+                    {language === 'ur' ? 'لاگ آؤٹ' : 'Logout'}
+                  </button>
                 </div>
 
                 <div className="py-2 space-y-1 text-xs border-b border-pink-100">
@@ -319,21 +308,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="py-1.5 space-y-1 text-xs">
-                  {/* Direct Switch to Super Admin */}
-                  <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      handleRoleSelect('admin');
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold flex items-center justify-between transition-colors"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <ShieldAlert className="w-3.5 h-3.5 text-purple-700" />
-                      <span>👑 Super Admin Console</span>
-                    </span>
-                    <span className="text-[10px] bg-purple-200 text-purple-800 px-1.5 py-0.2 rounded font-bold">Direct</span>
-                  </button>
-
                   {/* Download APK option */}
                   {onOpenApkModal && (
                     <button
@@ -350,17 +324,6 @@ export const Header: React.FC<HeaderProps> = ({
                       <span className="text-[10px] bg-pink-200 text-pink-900 px-1.5 py-0.2 rounded font-bold">Install</span>
                     </button>
                   )}
-
-                  <button
-                    onClick={() => {
-                      setIsProfileMenuOpen(false);
-                      openLoginModal(currentRole);
-                    }}
-                    className="w-full text-left px-2 py-1.5 rounded-lg hover:bg-pink-50 text-gray-700 font-semibold flex items-center justify-between"
-                  >
-                    <span>Multi-Role Login Portal</span>
-                    <KeyRound className="w-3.5 h-3.5" />
-                  </button>
 
                   {currentRole === 'customer' && (
                     <>
