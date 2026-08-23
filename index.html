@@ -18,6 +18,17 @@
   </head>
   <body class="bg-stone-50 text-stone-900 antialiased selection:bg-amber-500 selection:text-white">
     <div id="root"></div>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            console.log('Dastak ServiceWorker registration successful with scope:', registration.scope);
+          }).catch(function(err) {
+            console.log('Dastak ServiceWorker registration failed:', err);
+          });
+        });
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,10 +1,10 @@
 {
-  "id": "/?source=pwa",
-  "name": "Dastak Delivery Matli | دستک ڈیلیوری",
+  "id": "pk.dastakdelivery.matli",
+  "name": "Dastak Delivery Matli",
   "short_name": "Dastak",
-  "description": "Fast Food, Biryani, Karahi & Grocery Delivery in Matli, Sindh. Order now from top restaurants with fast doorstep delivery.",
-  "start_url": "./",
-  "scope": "./",
+  "description": "Fast Food, Biryani, Karahi & Grocery Delivery in Matli, Sindh. Order now with fast doorstep delivery.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "window-controls-overlay", "minimal-ui"],
   "background_color": "#FFF5F8",
@@ -16,16 +16,28 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "./icon-192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./icon-512.png",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -33,24 +45,43 @@
       "name": "Explore Restaurants",
       "short_name": "Food Menu",
       "description": "Browse Matli restaurants & menus",
-      "url": "./",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     },
     {
       "name": "Track Order",
       "short_name": "Track",
       "description": "Track active food order status",
-      "url": "./",
-      "icons": [{ "src": "./icon-192.png", "sizes": "192x192" }]
+      "url": "/",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "screenshots": [
     {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
+      "src": "/screenshot-mobile.png",
+      "sizes": "720x1280",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Dastak Delivery Mobile Interface"
+    },
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dastak Delivery Desktop Dashboard"
     }
   ]
 }
