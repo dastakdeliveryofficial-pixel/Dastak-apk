@@ -35,7 +35,8 @@ import {
   subscribeToRiders,
   subscribeToUsers,
   createFirestoreOrder,
-  updateFirestoreOrderStatus
+  updateFirestoreOrderStatus,
+  clearAllRestaurantsAndMenuFromFirestore
 } from '../lib/firestoreService';
 
 export interface ToastNotification {
@@ -198,6 +199,8 @@ interface AppContextType {
   // Admin Operations (Universal Menu, All Restaurants, Approval)
   approveVendor: (restaurantId: string) => void;
   toggleVendorStatus: (restaurantId: string) => void;
+  deleteRestaurant: (restaurantId: string) => Promise<void>;
+  clearAllRestaurantsAndVendors: () => Promise<void>;
   adminAddNewProduct: (item: Omit<MenuItem, 'id'>) => void;
   adminUpdateProduct: (id: string, updates: Partial<MenuItem>) => void;
   adminDeleteProduct: (id: string) => void;
@@ -259,6 +262,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const getCategoryName = (cat: Category) => getLocalizedName(cat, language);
   const getPromoContent = (promo: BannerPromo) => getLocalizedPromo(promo, language);
 
+  const defaultGuestUser: User = {
+    id: 'guest-customer',
+    name: 'Matli Customer',
+    phone: '0300-1234567',
+    email: 'customer@dastak.pk',
+    role: 'customer',
+    addresses: [],
+    isBlocked: false,
+    createdAt: new Date().toISOString()
+  };
+
   // Initial Auth Session Loader from localStorage
   const getInitialAuthSession = () => {
     try {
@@ -280,7 +294,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return {
       isAuthenticated: false,
-      currentUser: INITIAL_CUSTOMERS[0],
+      currentUser: INITIAL_CUSTOMERS[0] || defaultGuestUser,
       currentRole: 'customer' as UserRole,
       activeVendorRestaurantId: 'rest-1',
       activeRiderId: 'rider-1'
@@ -414,37 +428,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Subscribe to real-time Orders
     const unsubOrders = subscribeToOrders((liveOrders) => {
-      if (liveOrders && liveOrders.length > 0) {
-        setOrders(liveOrders);
-      }
+      setOrders(liveOrders || []);
     });
 
     // Subscribe to real-time Restaurants
     const unsubRestaurants = subscribeToRestaurants((liveRest) => {
-      if (liveRest && liveRest.length > 0) {
-        setRestaurants(liveRest);
-      }
+      setRestaurants(liveRest || []);
     });
 
     // Subscribe to real-time Menu Items
     const unsubMenu = subscribeToMenuItems((liveMenu) => {
-      if (liveMenu && liveMenu.length > 0) {
-        setMenuItems(liveMenu);
-      }
+      setMenuItems(liveMenu || []);
     });
 
     // Subscribe to real-time Riders
     const unsubRiders = subscribeToRiders((liveRiders) => {
-      if (liveRiders && liveRiders.length > 0) {
-        setRiders(liveRiders);
-      }
+      setRiders(liveRiders || []);
     });
 
     // Subscribe to real-time Users
     const unsubUsers = subscribeToUsers((liveUsers) => {
-      if (liveUsers && liveUsers.length > 0) {
-        setAllUsers(liveUsers);
-      }
+      setAllUsers(liveUsers || []);
     });
 
     // Listen to Firebase Auth state
@@ -910,6 +914,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const r = restaurants.find(rest => rest.id === restaurantId);
     if (!r) return;
     await updateRestaurantDetails(restaurantId, { isOpen: !r.isOpen });
+  };
+
+  const deleteRestaurant = async (restaurantId: string) => {
+    try {
+      await deleteDoc(doc(db, 'restaurants', restaurantId));
+      const itemsToDelete = menuItems.filter(i => i.restaurantId === restaurantId);
+      for (const item of itemsToDelete) {
+        await deleteDoc(doc(db, 'menuItems', item.id));
+      }
+    } catch (err) {
+      console.error('Error deleting restaurant:', err);
+    }
+    setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
+    setMenuItems(prev => prev.filter(i => i.restaurantId !== restaurantId));
+    triggerToast('Shop Deleted', 'Restaurant and menu items removed successfully', 'info');
+  };
+
+  const clearAllRestaurantsAndVendors = async () => {
+    try {
+      await clearAllRestaurantsAndMenuFromFirestore();
+    } catch (err) {
+      console.error('Error clearing vendors:', err);
+    }
+    setRestaurants([]);
+    setMenuItems([]);
+    setOrders([]);
+    triggerToast('Vendors Cleared', 'All dummy restaurants and vendor data have been cleared', 'success');
   };
 
   const toggleUserBlock = async (userId: string) => {
@@ -1512,6 +1543,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         riderCompleteDelivery,
         approveVendor,
         toggleVendorStatus,
+        deleteRestaurant,
+        clearAllRestaurantsAndVendors,
         adminAddNewProduct,
         adminUpdateProduct,
         adminDeleteProduct,

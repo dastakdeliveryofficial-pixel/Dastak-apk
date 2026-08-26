@@ -24,6 +24,8 @@ export const AdminDashboard: React.FC = () => {
     updatePlatformSettings,
     updateRestaurantDetails,
     updateOrderStatus,
+    deleteRestaurant,
+    clearAllRestaurantsAndVendors,
     adminAddNewProduct,
     adminUpdateProduct,
     adminDeleteProduct,
@@ -779,16 +781,31 @@ export const AdminDashboard: React.FC = () => {
                 <h3 className="font-bold text-base text-gray-900">
                   Registered Matli Restaurants ({restaurants.length})
                 </h3>
-                <p className="text-xs text-gray-400">Manage vendor listings, commission rates, and approval status</p>
+                <p className="text-xs text-gray-400">Manage vendor listings, commission rates, and shop removals</p>
               </div>
 
-              <button
-                onClick={() => setIsAddVendorOpen(!isAddVendorOpen)}
-                className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors self-start sm:self-auto"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{isAddVendorOpen ? 'Close Form' : 'Add Restaurant'}</span>
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                {restaurants.length > 0 && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Are you sure you want to remove ALL registered restaurants and menu items? This will reset vendor data to clean state.')) {
+                        clearAllRestaurantsAndVendors();
+                      }
+                    }}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear All Vendors</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setIsAddVendorOpen(!isAddVendorOpen)}
+                  className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{isAddVendorOpen ? 'Close Form' : 'Add Restaurant'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Add Vendor Form */}
@@ -867,70 +884,99 @@ export const AdminDashboard: React.FC = () => {
               )}
             </AnimatePresence>
 
-            {/* Vendor Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {restaurants.map((restaurant) => (
-                <div
-                  key={restaurant.id}
-                  className="bg-white rounded-3xl p-4 border border-pink-100 shadow-sm flex flex-col justify-between gap-3.5"
+            {/* Vendor Cards or Empty State */}
+            {restaurants.length === 0 ? (
+              <div className="bg-white rounded-3xl p-8 border border-pink-100 text-center space-y-3">
+                <Store className="w-12 h-12 text-pink-300 mx-auto" />
+                <h4 className="font-bold text-sm text-gray-900">No Restaurants Registered</h4>
+                <p className="text-xs text-gray-500 max-w-sm mx-auto">
+                  The vendor database is clean. Click "+ Add Restaurant" or have vendors sign up via their Vendor Portal.
+                </p>
+                <button
+                  onClick={() => setIsAddVendorOpen(true)}
+                  className="px-4 py-2 bg-[#E11D74] text-white text-xs font-bold rounded-xl shadow-xs"
                 >
-                  <div className="flex items-start gap-3">
-                    <img
-                      src={restaurant.image}
-                      alt={restaurant.name}
-                      className="w-14 h-14 rounded-2xl object-cover border border-pink-100 shrink-0"
-                    />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <h4 className="font-bold text-sm text-gray-900 truncate">
-                          {restaurant.name}
-                        </h4>
-                        <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full ${
-                          restaurant.isOpen ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
-                        }`}>
-                          {restaurant.isOpen ? 'OPEN' : 'CLOSED'}
+                  + Add First Restaurant
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {restaurants.map((restaurant) => (
+                  <div
+                    key={restaurant.id}
+                    className="bg-white rounded-3xl p-4 border border-pink-100 shadow-sm flex flex-col justify-between gap-3.5"
+                  >
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={restaurant.image}
+                        alt={restaurant.name}
+                        className="w-14 h-14 rounded-2xl object-cover border border-pink-100 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-bold text-sm text-gray-900 truncate">
+                            {restaurant.name}
+                          </h4>
+                          <span className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full ${
+                            restaurant.isOpen ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
+                          }`}>
+                            {restaurant.isOpen ? 'OPEN' : 'CLOSED'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{restaurant.address}, {restaurant.area}</p>
+                        <span className="text-[11px] text-amber-500 font-semibold block mt-0.5">
+                          ★ {restaurant.rating} ({restaurant.reviewsCount} reviews)
                         </span>
                       </div>
-                      <p className="text-xs text-gray-500 truncate">{restaurant.address}, {restaurant.area}</p>
-                      <span className="text-[11px] text-amber-500 font-semibold block mt-0.5">
-                        ★ {restaurant.rating} ({restaurant.reviewsCount} reviews)
-                      </span>
                     </div>
-                  </div>
 
-                  <div className="p-3 bg-pink-50/40 rounded-2xl border border-pink-100 space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Commission Rate</span>
-                      <span className="font-bold text-gray-900">{restaurant.commissionRate}%</span>
+                    <div className="p-3 bg-pink-50/40 rounded-2xl border border-pink-100 space-y-1 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Commission Rate</span>
+                        <span className="font-bold text-gray-900">{restaurant.commissionRate}%</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Total Lifetime Orders</span>
+                        <span className="font-semibold text-gray-800">{restaurant.totalOrdersCount}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Total GMV</span>
+                        <span className="font-black text-emerald-600">₨ {restaurant.totalRevenue.toLocaleString()}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Total Lifetime Orders</span>
-                      <span className="font-semibold text-gray-800">{restaurant.totalOrdersCount}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Total GMV</span>
-                      <span className="font-black text-emerald-600">₨ {restaurant.totalRevenue.toLocaleString()}</span>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] text-gray-500">WhatsApp: {restaurant.whatsappNumber}</span>
-                    <button
-                      onClick={() => {
-                        const newRate = prompt(`Enter new commission rate for ${restaurant.name} (%)`, restaurant.commissionRate.toString());
-                        if (newRate && !isNaN(Number(newRate))) {
-                          updateRestaurantDetails(restaurant.id, { commissionRate: Number(newRate) });
-                          triggerToast('Commission Updated', `${restaurant.name} rate set to ${newRate}%`, 'info');
-                        }
-                      }}
-                      className="text-xs font-bold text-gray-700 hover:text-[#E11D74] bg-white border border-pink-200 hover:bg-pink-50 px-3 py-1.5 rounded-xl transition-colors"
-                    >
-                      Edit Rate
-                    </button>
+                    <div className="flex items-center justify-between pt-1 border-t border-pink-50">
+                      <span className="text-[11px] text-gray-500">WhatsApp: {restaurant.whatsappNumber}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            const newRate = prompt(`Enter new commission rate for ${restaurant.name} (%)`, restaurant.commissionRate.toString());
+                            if (newRate && !isNaN(Number(newRate))) {
+                              updateRestaurantDetails(restaurant.id, { commissionRate: Number(newRate) });
+                              triggerToast('Commission Updated', `${restaurant.name} rate set to ${newRate}%`, 'info');
+                            }
+                          }}
+                          className="text-xs font-bold text-gray-700 hover:text-[#E11D74] bg-white border border-pink-200 hover:bg-pink-50 px-2.5 py-1 rounded-xl transition-colors"
+                        >
+                          Edit Rate
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete ${restaurant.name} and all its menu items?`)) {
+                              deleteRestaurant(restaurant.id);
+                            }
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+                          title="Delete Restaurant"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1203,6 +1249,30 @@ export const AdminDashboard: React.FC = () => {
                     Save Platform Settings
                   </button>
                 </div>
+              </div>
+            </div>
+
+            {/* Platform Clean Slate / Database Reset */}
+            <div className="md:col-span-2 bg-white rounded-3xl p-5 border border-pink-100 shadow-sm space-y-3">
+              <div className="flex items-center gap-2 pb-2 border-b border-pink-100 text-gray-900">
+                <RefreshCw className="w-4 h-4 text-[#E11D74]" />
+                <h3 className="font-bold text-sm">Database & Vendor Slate Management</h3>
+              </div>
+              <p className="text-xs text-gray-500">
+                Wipe all mock/demo restaurants and products from Firestore cloud storage to run a completely clean, production setup for real Matli shops.
+              </p>
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  onClick={() => {
+                    if (window.confirm('Wipe all restaurants, menu items, and active orders to start completely fresh?')) {
+                      clearAllRestaurantsAndVendors();
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-colors flex items-center gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Wipe All Vendor Data (Clean Slate)</span>
+                </button>
               </div>
             </div>
           </div>

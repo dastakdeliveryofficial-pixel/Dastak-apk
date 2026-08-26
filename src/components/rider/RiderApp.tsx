@@ -22,9 +22,9 @@ export const RiderApp: React.FC = () => {
     updateOrderStatus,
     allowRiderViewCustomerInfo,
     openAloChat,
+    openLoginModal,
     triggerToast 
   } = useApp();
-
 
   const [activeTab, setActiveTab] = useState<'active' | 'available' | 'earnings' | 'profile'>('active');
 
@@ -53,6 +53,29 @@ export const RiderApp: React.FC = () => {
   const handleCompleteOrder = (orderId: string) => {
     riderCompleteDelivery(orderId);
   };
+
+  if (!currentRider) {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-6 text-[#1F2937]">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-pink-100 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center mx-auto">
+            <Bike className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">No Rider Profile Registered</h2>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Join the Matli delivery fleet today to earn per delivery across all areas of Matli with instant payouts.
+          </p>
+          <button
+            onClick={() => openLoginModal('rider')}
+            className="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold rounded-2xl text-sm shadow-md shadow-emerald-500/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Bike className="w-4 h-4" />
+            <span>+ Join Delivery Fleet as Rider</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] pb-20 text-[#1F2937]">

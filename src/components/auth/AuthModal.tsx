@@ -398,40 +398,56 @@ export const AuthModal: React.FC = () => {
 
                 {vendorMode === 'login' ? (
                   <form onSubmit={handleVendorSubmit} className="space-y-3.5">
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 block mb-1">Select Your Restaurant / Shop</label>
-                      <select
-                        value={selectedRestaurantId}
-                        onChange={(e) => setSelectedRestaurantId(e.target.value)}
-                        className="w-full text-xs p-3 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74] font-semibold"
-                      >
-                        {restaurants.map(r => (
-                          <option key={r.id} value={r.id}>
-                            {r.name} ({r.area}) - ID: {r.vendorId || r.id}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {restaurants.length === 0 ? (
+                      <div className="p-4 bg-pink-50/70 border border-pink-200 rounded-2xl text-center space-y-2">
+                        <Store className="w-8 h-8 text-[#E11D74] mx-auto opacity-70" />
+                        <p className="text-xs font-bold text-gray-800">No restaurants currently registered</p>
+                        <p className="text-[11px] text-gray-500">Register your shop now to start receiving orders.</p>
+                        <button
+                          type="button"
+                          onClick={() => setVendorMode('register')}
+                          className="px-4 py-2 bg-[#E11D74] text-white text-xs font-bold rounded-xl shadow-xs"
+                        >
+                          + Register New Shop
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="text-xs font-bold text-gray-700 block mb-1">Select Your Restaurant / Shop</label>
+                          <select
+                            value={selectedRestaurantId}
+                            onChange={(e) => setSelectedRestaurantId(e.target.value)}
+                            className="w-full text-xs p-3 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74] font-semibold"
+                          >
+                            {restaurants.map(r => (
+                              <option key={r.id} value={r.id}>
+                                {r.name} ({r.area}) - ID: {r.vendorId || r.id}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
 
-                    <div>
-                      <label className="text-xs font-bold text-gray-700 block mb-1">Vendor Portal Password</label>
-                      <input
-                        type="password"
-                        value={vendorPassword}
-                        onChange={(e) => setVendorPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full text-xs p-3 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
-                      />
-                      <span className="text-[10px] text-gray-400 mt-1 block">Default demo password: vendor123</span>
-                    </div>
+                        <div>
+                          <label className="text-xs font-bold text-gray-700 block mb-1">Vendor Portal Password</label>
+                          <input
+                            type="password"
+                            value={vendorPassword}
+                            onChange={(e) => setVendorPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full text-xs p-3 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                          />
+                        </div>
 
-                    <button
-                      type="submit"
-                      className="w-full py-3.5 bg-linear-to-r from-[#E11D74] to-[#C2185B] text-white font-bold rounded-xl text-sm shadow-md shadow-pink-500/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Store className="w-4 h-4" />
-                      <span>Open Shop Vendor Dashboard</span>
-                    </button>
+                        <button
+                          type="submit"
+                          className="w-full py-3.5 bg-linear-to-r from-[#E11D74] to-[#C2185B] text-white font-bold rounded-xl text-sm shadow-md shadow-pink-500/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Store className="w-4 h-4" />
+                          <span>Open Shop Vendor Dashboard</span>
+                        </button>
+                      </>
+                    )}
                   </form>
                 ) : (
                   <form onSubmit={handleVendorSubmit} className="space-y-3">

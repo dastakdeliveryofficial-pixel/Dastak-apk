@@ -84,7 +84,7 @@ export const VendorDashboard: React.FC = () => {
     setEditingItem(null);
     setItemName('');
     setItemNameUrdu('');
-    setItemCategory(currentRestaurant.categories[0] || 'biryani');
+    setItemCategory(currentRestaurant?.categories?.[0] || 'biryani');
     setItemPrice(250);
     setItemDiscountedPrice(undefined);
     setItemDescription('');
@@ -112,7 +112,7 @@ export const VendorDashboard: React.FC = () => {
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!itemName.trim()) return;
+    if (!itemName.trim() || !currentRestaurant) return;
 
     const comboItems = itemIsCombo && itemComboItemsStr.trim()
       ? itemComboItemsStr.split(',').map(s => s.trim()).filter(Boolean)
@@ -141,6 +141,29 @@ export const VendorDashboard: React.FC = () => {
 
     setIsItemModalOpen(false);
   };
+
+  if (!currentRestaurant) {
+    return (
+      <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center p-6 text-[#1F2937]">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-pink-100 shadow-xl text-center space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-pink-50 text-[#E11D74] border border-pink-100 flex items-center justify-center mx-auto">
+            <UtensilsCrossed className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">No Restaurant Registered Yet</h2>
+          <p className="text-xs text-gray-500 leading-relaxed">
+            Register your Matli hotel, kitchen, or shop to start managing your digital menu, setting rates, and accepting live delivery orders.
+          </p>
+          <button
+            onClick={() => openLoginModal('vendor')}
+            className="w-full py-3.5 bg-gradient-to-r from-[#E11D74] to-[#C2185B] text-white font-bold rounded-2xl text-sm shadow-md shadow-pink-500/20 hover:opacity-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Register Your Shop Now</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] pb-20 text-[#1F2937]">
