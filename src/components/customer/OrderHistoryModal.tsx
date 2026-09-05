@@ -20,7 +20,7 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
   onClose,
   onTrackOrder
 }) => {
-  const { orders, currentUser, reorderPastOrder, triggerToast, t } = useApp();
+  const { orders, currentUser, reorderPastOrder, triggerToast, t, language } = useApp();
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'delivered' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -138,6 +138,30 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
 
         {/* Filter Tabs & Search Bar */}
         <div className="p-3 sm:p-4 border-b border-pink-100 bg-white space-y-3">
+          {/* Total Orders Count Banner */}
+          <div className="bg-pink-50/80 border border-pink-200/90 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#E11D74] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                📦
+              </div>
+              <div>
+                <span className="font-bold text-gray-900 text-xs block">
+                  {language === 'ur'
+                    ? `آپ کے ${customerOrders.length} آرڈرز ہو چکے ہیں`
+                    : language === 'sd'
+                    ? `توهان جا ${customerOrders.length} آرڊر ٿي چڪا آهن`
+                    : `Aapke ${customerOrders.length} orders ho chuke hain`}
+                </span>
+                <span className="text-[10px] text-[#E11D74] font-semibold">
+                  Orders Placed: {customerOrders.length} {customerOrders.length > 0 ? '• Matli Loyalty Record' : ''}
+                </span>
+              </div>
+            </div>
+            <span className="bg-white border border-pink-200 text-[#E11D74] text-xs font-black px-2.5 py-1 rounded-xl shadow-2xs">
+              {customerOrders.length} Orders
+            </span>
+          </div>
+
           {/* Search Input */}
           <div className="relative">
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />

@@ -40,7 +40,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     triggerToast,
     t,
     getRestaurantName,
-    getItemName
+    getItemName,
+    customerOrderCount,
+    language
   } = useApp();
 
   const [promoInput, setPromoInput] = useState('');
@@ -207,6 +209,30 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
             ) : (
               <>
+                {/* Customer Order History Count Banner */}
+                <div className="bg-gradient-to-r from-pink-50 via-rose-50 to-pink-50 border border-pink-200/80 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-2xs">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-[#E11D74] text-white flex items-center justify-center font-bold shrink-0 shadow-2xs text-xs">
+                      🛍️
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-xs text-gray-900 truncate">
+                        {language === 'ur'
+                          ? `آپ کے ${customerOrderCount} آرڈرز ہو چکے ہیں`
+                          : language === 'sd'
+                          ? `توهان جا ${customerOrderCount} آرڊر ٿي چڪا آهن`
+                          : `Aapke ${customerOrderCount} orders ho chuke hain`}
+                      </p>
+                      <p className="text-[10px] text-pink-700 font-semibold truncate">
+                        Orders Placed: <strong className="text-gray-900">{customerOrderCount}</strong> {customerOrderCount > 0 ? '• Matli Foodie' : '• First Order Special'}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="bg-white text-[#E11D74] border border-pink-200 text-xs font-black px-2.5 py-1 rounded-xl shrink-0 shadow-2xs">
+                    #{customerOrderCount}
+                  </span>
+                </div>
+
                 {/* Items List */}
                 <div className="space-y-2.5">
                   <h4 className="text-xs font-bold text-pink-900/60 uppercase tracking-wider">

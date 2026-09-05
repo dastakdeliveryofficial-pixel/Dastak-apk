@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import confetti from 'canvas-confetti';
 import { 
   User, UserRole, Restaurant, MenuItem, Order, Rider, 
-  Category, BannerPromo, PlatformSettings, Address, OrderItem, OrderStatus, Language, AloChatMessage, AppNotification 
+  Category, BannerPromo, PlatformSettings, Address, OrderItem, OrderStatus, Language, AloChatMessage, AppNotification,
+  FirestoreNotification
 } from '../types';
 import { 
   INITIAL_RESTAURANTS, INITIAL_MENU_ITEMS, INITIAL_ORDERS, 
@@ -36,7 +37,11 @@ import {
   subscribeToUsers,
   createFirestoreOrder,
   updateFirestoreOrderStatus,
-  clearAllRestaurantsAndMenuFromFirestore
+  clearAllRestaurantsAndMenuFromFirestore,
+  createFirestoreNotification,
+  subscribeToNotifications,
+  markNotificationReadInFirestore,
+  markAllNotificationsReadInFirestore
 } from '../lib/firestoreService';
 
 export interface ToastNotification {
@@ -226,6 +231,8 @@ interface AppContextType {
   // Omni-Role Notifications (Customer, Vendor, Rider, Admin cross-account real-time alerts)
   appNotifications: AppNotification[];
   unreadNotificationCount: number;
+  firestoreNotifications: FirestoreNotification[];
+  unreadFirestoreNotifCount: number;
   isNotificationCenterOpen: boolean;
   setIsNotificationCenterOpen: (open: boolean) => void;
   openNotificationCenter: () => void;
@@ -237,6 +244,10 @@ interface AppContextType {
   isSoundEnabled: boolean;
   setIsSoundEnabled: (enabled: boolean) => void;
   triggerTestRoleNotification: (role: UserRole) => void;
+
+  // Customer Orders & History Count (real-time synced)
+  customerOrders: Order[];
+  customerOrderCount: number;
 
   // Reset demo data
   resetToDefaultData: () => void;
@@ -452,6 +463,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  // Real-time Firestore notifications state (from "notifications" collection)
+  const [firestoreNotifications, setFirestoreNotifications] = useState<FirestoreNotification[]>([]);
+
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const openApkModal = () => setIsApkModalOpen(true);
@@ -489,7 +503,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (isSoundEnabled) {
-      sounds.playIncomingAlert();
+      sounds.playNewOrderAlert();
     }
 
     // Trigger desktop notification if permitted
@@ -503,7 +517,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const markNotificationAsRead = (id: string) => {
+  // Sync firestore notifications into appNotifications so all UI sees them
+  useEffect(() => {
+    if (!firestoreNotifications || firestoreNotifications.length === 0) return;
+    setAppNotifications(prev => {
+      const existingMap = new Map<string, AppNotification>(prev.map(n => [n.id, n]));
+      let changed = false;
+
+      firestoreNotifications.forEach(fn => {
+        if (!existingMap.has(fn.id)) {
+          changed = true;
+          const orderNumDisplay = fn.orderNumber || (fn.orderId ? fn.orderId.slice(0, 7) : 'DST');
+          existingMap.set(fn.id, {
+            id: fn.id,
+            targetRole: fn.targetRole || 'admin',
+            orderId: fn.orderId,
+            orderNumber: fn.orderNumber,
+            customerName: fn.customerName,
+            items: fn.items,
+            time: fn.time,
+            title: `🔔 New Order #${orderNumDisplay}`,
+            message: `${fn.customerName}: ${fn.items}${fn.total ? ` • ₨ ${fn.total}` : ''}`,
+            timestamp: fn.time || new Date(fn.createdAt).toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }),
+            read: fn.read,
+            type: 'order',
+            createdAt: new Date(fn.createdAt).getTime() || Date.now(),
+            action: {
+              role: 'admin',
+              orderId: fn.orderId
+            }
+          });
+        } else {
+          // If read status changed in Firestore, sync it
+          const current = existingMap.get(fn.id)!;
+          if (current.read !== fn.read) {
+            changed = true;
+            existingMap.set(fn.id, { ...current, read: fn.read });
+          }
+        }
+      });
+
+      if (!changed) return prev;
+      const merged = Array.from(existingMap.values()).sort((a, b) => b.createdAt - a.createdAt);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_omni_notifications', JSON.stringify(merged.slice(0, 50)));
+      } catch {}
+      return merged.slice(0, 50);
+    });
+  }, [firestoreNotifications]);
+
+  const markNotificationAsRead = async (id: string) => {
     setAppNotifications(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
       try {
@@ -511,9 +574,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    setFirestoreNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+
+    try {
+      await markNotificationReadInFirestore(id);
+    } catch {
+      // Ignore if local mock id
+    }
   };
 
-  const markAllNotificationsAsRead = () => {
+  const markAllNotificationsAsRead = async () => {
     setAppNotifications(prev => {
       const updated = prev.map(n => ({ ...n, read: true }));
       try {
@@ -521,6 +592,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    const unreadIds = firestoreNotifications.filter(n => !n.read).map(n => n.id);
+    setFirestoreNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+    if (unreadIds.length > 0) {
+      try {
+        await markAllNotificationsReadInFirestore(unreadIds);
+      } catch (e) {
+        console.error('Error marking all notifications read in Firestore:', e);
+      }
+    }
   };
 
   const removeAppNotification = (id: string) => {
@@ -542,7 +624,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const openNotificationCenter = () => setIsNotificationCenterOpen(true);
   const closeNotificationCenter = () => setIsNotificationCenterOpen(false);
-  const unreadNotificationCount = appNotifications.filter(n => !n.read).length;
+
+  const unreadFirestoreNotifCount = firestoreNotifications.filter(n => !n.read).length;
+  const unreadNotificationCount = Math.max(
+    unreadFirestoreNotifCount,
+    appNotifications.filter(n => !n.read).length
+  );
 
   const triggerTestRoleNotification = (role: UserRole) => {
     const testNum = Math.floor(1000 + Math.random() * 9000);
@@ -780,6 +867,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setAllUsers(liveUsers || []);
     });
 
+    // Subscribe to real-time Firestore Notifications collection
+    const unsubNotifs = subscribeToNotifications(
+      (liveNotifs) => {
+        setFirestoreNotifications(liveNotifs);
+      },
+      (newNotif) => {
+        // Play alert sound if audio is enabled
+        if (isSoundEnabled) {
+          sounds.playNewOrderAlert();
+        }
+        // Show visible toast banner "New order received!"
+        const orderIdDisplay = newNotif.orderNumber || (newNotif.orderId ? newNotif.orderId.slice(0, 7) : 'DST');
+        triggerToast(
+          '🔔 New order received!',
+          `Order #${orderIdDisplay} from ${newNotif.customerName} (${newNotif.items})`,
+          'success'
+        );
+      }
+    );
+
     // Listen to Firebase Auth state
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -809,6 +916,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (err) {
           console.error('Error checking auth user profile:', err);
         }
+      } else {
+        // User logged out
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
+        if (!saved) {
+          setIsAuthenticatedState(false);
+          setCurrentRoleState('customer');
+          setCurrentUserState(INITIAL_CUSTOMERS[0]);
+        }
       }
     });
 
@@ -818,6 +933,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubMenu();
       unsubRiders();
       unsubUsers();
+      unsubNotifs();
       unsubAuth();
     };
   }, [isSoundEnabled]);
@@ -1081,7 +1197,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Fallback local
       const fallbackId = 'ord-' + Date.now();
       createdOrder = { ...orderData, id: fallbackId };
-      setOrders(prev => [createdOrder, ...prev]);
+    }
+
+    // Immediately update local orders list so customerOrderCount increments right away!
+    setOrders(prev => [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)]);
+
+    // 2. Write to Firestore "notifications" collection for real-time Admin/Rider alerts!
+    const itemsFormatted = cart.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+    const notifTime = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+    try {
+      await createFirestoreNotification({
+        orderId: createdOrder.id,
+        orderNumber: orderNum,
+        customerName: currentUser.name || deliveryAddress.phone || 'Matli Customer',
+        customerPhone: deliveryAddress.phone || currentUser.phone,
+        restaurantName: restaurant.name,
+        items: itemsFormatted,
+        total: cartTotal,
+        time: notifTime,
+        createdAt: new Date().toISOString(),
+        read: false,
+        targetRole: 'admin'
+      });
+    } catch (notifErr) {
+      console.error('Failed to create notification document in Firestore:', notifErr);
     }
 
     // Clear cart & set tracking
@@ -1710,12 +1849,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newRider;
   };
 
+  // Real-time Customer Orders and Order Count
+  const customerOrders = React.useMemo(() => {
+    return orders.filter(o => {
+      return (
+        o.customerId === currentUser?.id ||
+        (Boolean(currentUser?.phone) && o.customerPhone === currentUser?.phone) ||
+        (Boolean(currentUser?.name) && o.customerName === currentUser?.name)
+      );
+    });
+  }, [orders, currentUser?.id, currentUser?.phone, currentUser?.name]);
+
+  const customerOrderCount = customerOrders.length;
+
   const logoutUser = async () => {
     try {
+      // 1. Immediately wipe local auth storage
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_auth_session');
+
+      // 2. Reset React state synchronously
+      setIsAuthenticatedState(false);
+      setCurrentRoleState('customer');
+      setCurrentUserState(INITIAL_CUSTOMERS[0]);
+      setSelectedRestaurant(null);
+      setTrackingOrderId(null);
+      setIsAuthModalOpen(false);
+
+      // 3. Logout from Firebase
       await logoutFirebaseUser();
-    } catch {}
-    syncAuthSession(false, INITIAL_CUSTOMERS[0], 'customer');
-    triggerToast('Logged Out', 'Signed out from Dastak Delivery.', 'info');
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      // 4. Force hard reload to completely flush JS memory & DOM, preventing any white screen issues
+      window.location.reload();
+    }
   };
 
   const handleSetAllowRiderViewCustomerInfo = (val: boolean) => {
@@ -1905,6 +2072,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         triggerToast,
         appNotifications,
         unreadNotificationCount,
+        firestoreNotifications,
+        unreadFirestoreNotifCount,
+        customerOrders,
+        customerOrderCount,
         isNotificationCenterOpen,
         setIsNotificationCenterOpen,
         openNotificationCenter,

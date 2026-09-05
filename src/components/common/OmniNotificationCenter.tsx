@@ -261,11 +261,14 @@ export const OmniNotificationCenter: React.FC<OmniNotificationCenterProps> = ({
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className={`p-3.5 rounded-2xl border transition-all text-xs space-y-2 ${
+                  className={`p-3.5 rounded-2xl border transition-all text-xs space-y-2 cursor-pointer ${
                     n.read 
                       ? 'bg-white border-pink-100 text-gray-700' 
-                      : 'bg-pink-50/40 border-pink-300/80 shadow-xs'
+                      : 'bg-pink-50/40 border-pink-300/80 shadow-xs hover:border-pink-400'
                   }`}
+                  onClick={() => {
+                    if (!n.read) markNotificationAsRead(n.id);
+                  }}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-1.5 flex-wrap">

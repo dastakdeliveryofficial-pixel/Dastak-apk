@@ -4,7 +4,7 @@ import {
   Bike, Power, MapPin, Phone, MessageCircle, DollarSign, 
   CheckCircle2, Navigation, Clock, ShieldCheck, Wallet, 
   AlertCircle, ChevronRight, User, Sparkles, Store, Home, Banknote,
-  MessageSquare, Lock, PhoneOff
+  MessageSquare, Lock, PhoneOff, Bell, LogOut, Volume2, VolumeX
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { InteractiveMap } from '../common/InteractiveMap';
@@ -23,7 +23,14 @@ export const RiderApp: React.FC = () => {
     allowRiderViewCustomerInfo,
     openAloChat,
     openLoginModal,
-    triggerToast 
+    triggerToast,
+    unreadNotificationCount,
+    openNotificationCenter,
+    logoutUser,
+    firestoreNotifications,
+    markNotificationAsRead,
+    isSoundEnabled,
+    setIsSoundEnabled
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'active' | 'available' | 'earnings' | 'profile'>('active');
@@ -134,8 +141,77 @@ export const RiderApp: React.FC = () => {
               <Power className="w-3.5 h-3.5" />
               <span>{currentRider.isOnline ? 'ONLINE (Ready)' : 'OFFLINE'}</span>
             </button>
+
+            {/* Notification Bell with Badge */}
+            <button
+              onClick={openNotificationCenter}
+              className="relative p-2.5 rounded-xl bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 shadow-2xs transition-all flex items-center gap-1.5"
+              title="Real-time Order Notifications"
+            >
+              <Bell className="w-4 h-4 text-[#FF6B00]" />
+              <span className="text-xs font-bold hidden sm:inline text-gray-700">Alerts</span>
+              {unreadNotificationCount > 0 && (
+                <span className="min-w-5 h-5 px-1 rounded-full bg-[#FF6B00] text-white text-[10px] font-black flex items-center justify-center animate-bounce shadow-xs">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+
+            {/* Sound Toggle */}
+            <button
+              onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+              className={`p-2.5 rounded-xl border transition-all flex items-center gap-1 text-xs font-bold ${
+                isSoundEnabled
+                  ? 'bg-orange-50 border-orange-200 text-[#FF6B00]'
+                  : 'bg-gray-100 border-gray-200 text-gray-400'
+              }`}
+              title={isSoundEnabled ? 'Alert Chime Sound: ON' : 'Alert Chime Sound: OFF'}
+            >
+              {isSoundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            {/* Rider Logout Button (Clean hard reload & state purge) */}
+            <button
+              onClick={() => logoutUser()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Logout from Rider Portal"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
+
+        {/* Real-time Order Notification Banner */}
+        {firestoreNotifications.some(n => !n.read) && (
+          <div className="max-w-7xl mx-auto mt-4 p-3 bg-gradient-to-r from-[#FF6B00] to-amber-600 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-base shrink-0 animate-bounce">
+                🔔
+              </span>
+              <div className="min-w-0">
+                <p className="font-black text-xs sm:text-sm truncate">
+                  New order placed in Matli!
+                </p>
+                <p className="text-[11px] text-orange-100 truncate">
+                  {firestoreNotifications.find(n => !n.read)?.customerName} • {firestoreNotifications.find(n => !n.read)?.items} (₨ {firestoreNotifications.find(n => !n.read)?.total})
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const unread = firestoreNotifications.find(n => !n.read);
+                  if (unread) markNotificationAsRead(unread.id);
+                  openNotificationCenter();
+                }}
+                className="bg-white text-[#FF6B00] text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs hover:bg-orange-50 transition-colors"
+              >
+                View & Mark Read
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats Row */}
         <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">
@@ -689,6 +765,16 @@ export const RiderApp: React.FC = () => {
                   value={`${currentRider.currentArea}, Matli (Sindh)`}
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                 />
+              </div>
+
+              <div className="pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => logoutUser()}
+                  className="w-full py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout from Rider Portal</span>
+                </button>
               </div>
             </div>
           </div>

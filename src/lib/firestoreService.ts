@@ -32,7 +32,8 @@ import {
   PlatformSettings,
   OrderStatus,
   Address,
-  UserRole
+  UserRole,
+  FirestoreNotification
 } from '../types';
 import { 
   INITIAL_RESTAURANTS, 
@@ -53,6 +54,7 @@ const RIDERS_COLLECTION = 'riders';
 const SETTINGS_COLLECTION = 'settings';
 const PROMOS_COLLECTION = 'promos';
 const CATEGORIES_COLLECTION = 'categories';
+const NOTIFICATIONS_COLLECTION = 'notifications';
 
 // 1. Initial Seed to Firestore if database is empty
 export async function seedInitialFirestoreData() {
@@ -381,4 +383,125 @@ export function subscribeToUsers(onUpdate: (users: User[]) => void) {
       handleFirestoreError(err, OperationType.LIST, USERS_COLLECTION);
     }
   );
+}
+
+// 5. Real-time Notifications Collection (for Admin & Rider live alerts)
+export async function createFirestoreNotification(data: {
+  orderId: string;
+  orderNumber?: string;
+  customerName: string;
+  customerPhone?: string;
+  restaurantName?: string;
+  items: string;
+  total?: number;
+  time?: string;
+  createdAt?: string;
+  read?: boolean;
+  targetRole?: 'admin' | 'rider' | 'vendor' | 'customer' | 'all';
+}): Promise<string> {
+  try {
+    const docRef = await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
+      orderId: data.orderId,
+      orderNumber: data.orderNumber || '',
+      customerName: data.customerName || 'Customer',
+      customerPhone: data.customerPhone || '',
+      restaurantName: data.restaurantName || '',
+      items: data.items || '',
+      total: data.total || 0,
+      time: data.time || new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: data.createdAt || new Date().toISOString(),
+      read: false,
+      targetRole: data.targetRole || 'admin'
+    });
+    return docRef.id;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, NOTIFICATIONS_COLLECTION);
+    throw err;
+  }
+}
+
+export function subscribeToNotifications(
+  onUpdate: (notifications: FirestoreNotification[]) => void,
+  onNewDoc?: (notification: FirestoreNotification) => void
+) {
+  let isInitialSnapshot = true;
+  return onSnapshot(
+    collection(db, NOTIFICATIONS_COLLECTION),
+    (snapshot) => {
+      const list: FirestoreNotification[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          orderId: d.orderId || '',
+          orderNumber: d.orderNumber,
+          customerName: d.customerName || 'Customer',
+          customerPhone: d.customerPhone,
+          restaurantName: d.restaurantName,
+          items: d.items || '',
+          total: d.total,
+          time: d.time || '',
+          createdAt: d.createdAt || '',
+          read: !!d.read,
+          targetRole: d.targetRole || 'admin'
+        });
+      });
+
+      // Sort newest first
+      list.sort((a, b) => {
+        const timeA = new Date(a.createdAt).getTime() || 0;
+        const timeB = new Date(b.createdAt).getTime() || 0;
+        return timeB - timeA;
+      });
+
+      // Check for freshly added notifications after initial load
+      if (!isInitialSnapshot && onNewDoc) {
+        snapshot.docChanges().forEach((change) => {
+          if (change.type === 'added') {
+            const d = change.doc.data();
+            const newNotif: FirestoreNotification = {
+              id: change.doc.id,
+              orderId: d.orderId || '',
+              orderNumber: d.orderNumber,
+              customerName: d.customerName || 'Customer',
+              customerPhone: d.customerPhone,
+              restaurantName: d.restaurantName,
+              items: d.items || '',
+              total: d.total,
+              time: d.time || '',
+              createdAt: d.createdAt || '',
+              read: !!d.read,
+              targetRole: d.targetRole || 'admin'
+            };
+            onNewDoc(newNotif);
+          }
+        });
+      }
+
+      isInitialSnapshot = false;
+      onUpdate(list);
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, NOTIFICATIONS_COLLECTION);
+    }
+  );
+}
+
+export async function markNotificationReadInFirestore(notificationId: string): Promise<void> {
+  try {
+    const docRef = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
+    await updateDoc(docRef, { read: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${NOTIFICATIONS_COLLECTION}/${notificationId}`);
+  }
+}
+
+export async function markAllNotificationsReadInFirestore(notificationIds: string[]): Promise<void> {
+  try {
+    await Promise.all(
+      notificationIds.map(id => updateDoc(doc(db, NOTIFICATIONS_COLLECTION, id), { read: true }))
+    );
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, NOTIFICATIONS_COLLECTION);
+  }
 }

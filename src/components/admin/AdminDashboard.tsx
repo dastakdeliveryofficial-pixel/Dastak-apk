@@ -6,7 +6,7 @@ import {
   Settings, Tag, Sparkles, AlertCircle, ShoppingBag, 
   Phone, Smartphone, CheckCircle2, ChevronRight, BarChart2,
   UtensilsCrossed, MessageSquare, Send, ShieldCheck, PhoneOff, Eye,
-  Lock, RefreshCw
+  Lock, RefreshCw, Bell, LogOut, Volume2, VolumeX
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, Rider, PromoCode, OrderStatus, MenuItem } from '../../types';
@@ -34,7 +34,14 @@ export const AdminDashboard: React.FC = () => {
     setAllowRiderViewCustomerInfo,
     openAloChat,
     triggerToast,
-    language 
+    language,
+    unreadNotificationCount,
+    openNotificationCenter,
+    logoutUser,
+    firestoreNotifications,
+    markNotificationAsRead,
+    isSoundEnabled,
+    setIsSoundEnabled
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'vendors' | 'riders' | 'settings' | 'vouchers'>('overview');
@@ -190,8 +197,36 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Privacy and City Status Pill */}
+          {/* Admin Controls: Notifications, Sound, Status, and Logout */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Real-time Order Notification Bell with unread badge */}
+            <button
+              onClick={openNotificationCenter}
+              className="relative p-2.5 rounded-2xl bg-white border border-pink-200 hover:bg-pink-50 text-gray-700 shadow-2xs transition-all flex items-center gap-2"
+              title="Real-time Order Notifications"
+            >
+              <Bell className="w-4 h-4 text-[#E11D74]" />
+              <span className="text-xs font-bold hidden sm:inline text-gray-800">Alerts</span>
+              {unreadNotificationCount > 0 && (
+                <span className="min-w-5 h-5 px-1 rounded-full bg-[#E11D74] text-white text-[10px] font-black flex items-center justify-center animate-bounce shadow-xs">
+                  {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Sound Mute/Unmute Toggle */}
+            <button
+              onClick={() => setIsSoundEnabled(!isSoundEnabled)}
+              className={`p-2.5 rounded-2xl border transition-all flex items-center gap-1 text-xs font-bold ${
+                isSoundEnabled
+                  ? 'bg-pink-50/80 border-pink-200 text-[#E11D74]'
+                  : 'bg-gray-100 border-gray-200 text-gray-400'
+              }`}
+              title={isSoundEnabled ? 'Alert Chime Sound: ON' : 'Alert Chime Sound: OFF'}
+            >
+              {isSoundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
             <div className="flex items-center gap-2 bg-pink-50/70 border border-pink-200 px-3 py-1.5 rounded-2xl">
               <div className="text-xs">
                 <span className="text-gray-400 block text-[9px] font-bold uppercase">Rider Privacy Mode</span>
@@ -199,7 +234,7 @@ export const AdminDashboard: React.FC = () => {
                   {allowRiderViewCustomerInfo ? (
                     <><Eye className="w-3.5 h-3.5" /> Number Visible</>
                   ) : (
-                    <><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Masked (Alo Chat Only)</>
+                    <><ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Masked</>
                   )}
                 </span>
               </div>
@@ -210,12 +245,53 @@ export const AdminDashboard: React.FC = () => {
                 <span className="text-emerald-950 block text-[9px] font-bold uppercase">Operations</span>
                 <span className="text-emerald-700 font-bold flex items-center gap-1.5 text-xs">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Matli Hub Live
+                  Matli Live
                 </span>
               </div>
             </div>
+
+            {/* Logout Button (Hard reload & clean redirect) */}
+            <button
+              onClick={() => logoutUser()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              title="Logout from Admin Portal"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Logout</span>
+            </button>
           </div>
         </div>
+
+        {/* Real-time New Order Banner if any unread Firestore notifications exist */}
+        {firestoreNotifications.some(n => !n.read) && (
+          <div className="max-w-7xl mx-auto mt-4 p-3 bg-gradient-to-r from-rose-500 via-[#E11D74] to-pink-600 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center text-base shrink-0 animate-bounce">
+                🔔
+              </span>
+              <div className="min-w-0">
+                <p className="font-black text-xs sm:text-sm truncate">
+                  New order received from Matli!
+                </p>
+                <p className="text-[11px] text-pink-100 truncate">
+                  {firestoreNotifications.find(n => !n.read)?.customerName} • {firestoreNotifications.find(n => !n.read)?.items} (₨ {firestoreNotifications.find(n => !n.read)?.total})
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  const unread = firestoreNotifications.find(n => !n.read);
+                  if (unread) markNotificationAsRead(unread.id);
+                  openNotificationCenter();
+                }}
+                className="bg-white text-[#E11D74] text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs hover:bg-pink-50 transition-colors"
+              >
+                View & Mark Read
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Global KPI Metrics */}
         <div className="max-w-7xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6">

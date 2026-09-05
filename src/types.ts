@@ -232,6 +232,10 @@ export interface AppNotification {
   targetRole: 'customer' | 'vendor' | 'rider' | 'admin' | 'all';
   targetEntityId?: string;
   orderId?: string;
+  orderNumber?: string;
+  customerName?: string;
+  items?: string;
+  time?: string;
   title: string;
   message: string;
   timestamp: string;
@@ -244,6 +248,21 @@ export interface AppNotification {
     restaurantId?: string;
     riderId?: string;
   };
+}
+
+export interface FirestoreNotification {
+  id: string;
+  orderId: string;
+  orderNumber?: string;
+  customerName: string;
+  customerPhone?: string;
+  items: string;
+  time: string;
+  createdAt: string;
+  read: boolean;
+  total?: number;
+  restaurantName?: string;
+  targetRole?: 'admin' | 'rider' | 'vendor' | 'customer' | 'all';
 }
 
 

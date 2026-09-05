@@ -45,7 +45,8 @@ export const Header: React.FC<HeaderProps> = ({
     getRestaurantName,
     unreadNotificationCount,
     openNotificationCenter,
-    openApkModal
+    openApkModal,
+    customerOrderCount
   } = useApp();
 
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
@@ -302,13 +303,18 @@ export const Header: React.FC<HeaderProps> = ({
                   <div>
                     <p className="font-bold text-xs text-gray-800">{currentUser.name}</p>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">{currentRole}</p>
+                    {currentRole === 'customer' && (
+                      <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-[#E11D74] bg-pink-50 px-1.5 py-0.5 rounded border border-pink-200">
+                        📦 {customerOrderCount} {language === 'ur' ? 'آرڈرز' : 'Orders'}
+                      </span>
+                    )}
                   </div>
                   <button
                     onClick={() => {
                       setIsProfileMenuOpen(false);
                       logoutUser();
                     }}
-                    className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg"
+                    className="text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
                   >
                     {language === 'ur' ? 'لاگ آؤٹ' : 'Logout'}
                   </button>

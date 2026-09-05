@@ -59,5 +59,10 @@ service cloud.firestore {
     match /chats/{chatId} {
       allow read, write: if true;
     }
+
+    // Notifications collection for real-time order alerts
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
   }
 }

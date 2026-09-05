@@ -1,6 +1,39 @@
 // Web Audio API Sound Synthesizer for notifications
 class SoundManager {
   private ctx: AudioContext | null = null;
+  private isUnlocked: boolean = false;
+
+  constructor() {
+    this.setupInteractionListeners();
+  }
+
+  // Ensure AudioContext is unlocked upon first user interaction (bypasses browser autoplay restrictions)
+  private setupInteractionListeners() {
+    if (typeof window === 'undefined') return;
+    const unlockHandler = () => {
+      this.unlockAudio();
+      window.removeEventListener('click', unlockHandler);
+      window.removeEventListener('touchstart', unlockHandler);
+      window.removeEventListener('keydown', unlockHandler);
+    };
+
+    window.addEventListener('click', unlockHandler, { passive: true, once: true });
+    window.addEventListener('touchstart', unlockHandler, { passive: true, once: true });
+    window.addEventListener('keydown', unlockHandler, { passive: true, once: true });
+  }
+
+  public unlockAudio(): boolean {
+    try {
+      const ctx = this.getContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      this.isUnlocked = true;
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   private getContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -11,7 +44,7 @@ class SoundManager {
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {});
     }
     return this.ctx;
   }
@@ -72,6 +105,43 @@ class SoundManager {
     }
   }
 
+  // Specific New Order Alert Sound (Loud, Clear, Bell chime for Admin/Rider)
+  playNewOrderAlert() {
+    try {
+      const ctx = this.getContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // 3-Tone chime (E5 -> G#5 -> B5 -> E6)
+      const notes = [
+        { freq: 659.25, time: 0, dur: 0.25 },     // E5
+        { freq: 830.61, time: 0.18, dur: 0.25 },  // G#5
+        { freq: 987.77, time: 0.36, dur: 0.35 },  // B5
+        { freq: 1318.51, time: 0.54, dur: 0.6 }   // E6
+      ];
+
+      notes.forEach(({ freq, time, dur }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, now + time);
+        
+        // Crisp attack & smooth decay
+        gain.gain.setValueAtTime(0.001, now + time);
+        gain.gain.exponentialRampToValueAtTime(0.2, now + time + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + time + dur);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + time);
+        osc.stop(now + time + dur);
+      });
+    } catch {
+      // Ignore
+    }
+  }
+
   // Incoming order alert for Vendor / Rider
   playIncomingAlert() {
     try {
@@ -118,6 +188,5 @@ class SoundManager {
     }
   }
 }
-
 
 export const sounds = new SoundManager();
