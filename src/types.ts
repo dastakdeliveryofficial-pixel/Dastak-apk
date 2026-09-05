@@ -52,6 +52,16 @@ export interface Restaurant {
   isApproved: boolean;
 }
 
+export interface MenuItemVariationOption {
+  name: string;
+  price: number;
+}
+
+export interface MenuItemVariationType {
+  type: string;
+  options: MenuItemVariationOption[];
+}
+
 export interface MenuItem {
   id: string;
   restaurantId: string;
@@ -64,12 +74,14 @@ export interface MenuItem {
   price: number; // in PKR
   discountedPrice?: number;
   image: string;
+  emoji?: string;
   category: string;
   isAvailable: boolean;
   isFeatured?: boolean;
   isCombo?: boolean;
   comboItems?: string[];
   preparationTime?: string;
+  variationTypes?: MenuItemVariationType[];
 }
 
 export interface OrderItem {
@@ -78,6 +90,7 @@ export interface OrderItem {
   name: string;
   price: number;
   quantity: number;
+  selectedVariation?: string;
   notes?: string;
   image?: string;
 }
@@ -213,4 +226,24 @@ export interface AIAgentMessage {
   actionType?: 'restaurant' | 'track' | 'whatsapp' | 'deal';
   actionTarget?: string;
 }
+
+export interface AppNotification {
+  id: string;
+  targetRole: 'customer' | 'vendor' | 'rider' | 'admin' | 'all';
+  targetEntityId?: string;
+  orderId?: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: 'order' | 'status' | 'rider' | 'vendor' | 'system';
+  createdAt: number;
+  action?: {
+    role: UserRole;
+    orderId?: string;
+    restaurantId?: string;
+    riderId?: string;
+  };
+}
+
 

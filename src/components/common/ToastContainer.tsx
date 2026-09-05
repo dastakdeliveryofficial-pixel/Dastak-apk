@@ -7,38 +7,40 @@ export const ToastContainer: React.FC = () => {
   const { notifications, dismissNotification } = useApp();
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-1.5 pointer-events-none max-w-sm w-[92%] sm:w-auto px-2">
+    <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2 pointer-events-none max-w-sm w-full px-3">
       <AnimatePresence>
         {notifications.map((toast) => (
           <motion.div
             key={toast.id}
-            initial={{ opacity: 0, y: 15, scale: 0.96 }}
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 10, scale: 0.96 }}
-            transition={{ duration: 0.15 }}
-            className={`pointer-events-auto rounded-full px-4 py-2 shadow-lg border flex items-center gap-2.5 backdrop-blur-md text-xs font-medium ${
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.18 }}
+            className={`pointer-events-auto rounded-2xl p-3 shadow-xl border flex items-center justify-between gap-3 backdrop-blur-md text-xs font-medium w-full ${
               toast.type === 'success'
-                ? 'bg-gray-900/95 text-white border-emerald-500/50 shadow-black/20'
+                ? 'bg-gray-900/95 text-white border-pink-500/40 shadow-black/20'
                 : toast.type === 'error'
-                ? 'bg-rose-950/95 text-white border-rose-600/50'
+                ? 'bg-gray-900/95 text-white border-rose-500/50 shadow-black/20'
                 : toast.type === 'warning'
-                ? 'bg-amber-950/95 text-white border-amber-500/50'
-                : 'bg-gray-900/95 text-white border-gray-700/50'
+                ? 'bg-gray-900/95 text-white border-amber-500/50 shadow-black/20'
+                : 'bg-gray-900/95 text-white border-gray-700/60 shadow-black/20'
             }`}
           >
-            <div className="shrink-0">
-              {toast.type === 'success' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-              {toast.type === 'error' && <AlertCircle className="w-4 h-4 text-rose-400" />}
-              {toast.type === 'warning' && <AlertTriangle className="w-4 h-4 text-amber-400" />}
-              {toast.type === 'info' && <Info className="w-4 h-4 text-pink-400" />}
-            </div>
-            <div className="flex items-center gap-1.5 truncate max-w-[260px] sm:max-w-xs">
-              <span className="font-bold text-white text-xs">{toast.title}:</span>
-              <span className="text-gray-200 text-xs truncate">{toast.message}</span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="shrink-0">
+                {toast.type === 'success' && <div className="w-2.5 h-2.5 rounded-full bg-[#E11D74] animate-pulse" />}
+                {toast.type === 'error' && <div className="w-2.5 h-2.5 rounded-full bg-rose-500" />}
+                {toast.type === 'warning' && <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />}
+                {toast.type === 'info' && <div className="w-2.5 h-2.5 rounded-full bg-pink-400" />}
+              </div>
+              <div className="min-w-0">
+                <p className="font-bold text-white text-xs truncate">{toast.title}</p>
+                <p className="text-gray-300 text-[11px] truncate">{toast.message}</p>
+              </div>
             </div>
             <button
               onClick={() => dismissNotification(toast.id)}
-              className="shrink-0 text-gray-400 hover:text-white transition-colors ml-1 p-0.5"
+              className="shrink-0 text-gray-400 hover:text-white transition-colors p-1"
               aria-label="Dismiss"
             >
               <X className="w-3.5 h-3.5" />

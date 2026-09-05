@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { ToastContainer } from './components/common/ToastContainer';
+import { OmniNotificationCenter } from './components/common/OmniNotificationCenter';
 import { CustomerHome } from './components/customer/CustomerHome';
 import { RestaurantMenuModal } from './components/customer/RestaurantMenuModal';
 import { CartDrawer } from './components/customer/CartDrawer';
@@ -19,14 +20,29 @@ import { MessageCircle, Smartphone, ShieldAlert } from 'lucide-react';
 import { openWhatsAppChat } from './utils/whatsapp';
 
 const MainAppContent: React.FC = () => {
-  const { currentRole, setCurrentRole, isAuthenticated, loginUser, platformSettings, language, setLanguage, t, triggerToast } = useApp();
+  const { 
+    currentRole, 
+    setCurrentRole, 
+    isAuthenticated, 
+    loginUser, 
+    platformSettings, 
+    language, 
+    setLanguage, 
+    t, 
+    triggerToast,
+    isNotificationCenterOpen,
+    closeNotificationCenter,
+    isApkModalOpen,
+    setIsApkModalOpen,
+    openApkModal,
+    closeApkModal
+  } = useApp();
 
   // Modals & Navigation state
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isAddressOpen, setIsAddressOpen] = useState(false);
-  const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState<string | null>(null);
 
   const handleOpenRestaurant = (restaurant: Restaurant) => {
@@ -49,6 +65,14 @@ const MainAppContent: React.FC = () => {
     return (
       <>
         <LoginScreen />
+        <OmniNotificationCenter 
+          isOpen={isNotificationCenterOpen} 
+          onClose={closeNotificationCenter} 
+        />
+        <ApkDownloadModal
+          isOpen={isApkModalOpen}
+          onClose={closeApkModal}
+        />
         <ToastContainer />
       </>
     );
@@ -193,6 +217,13 @@ const MainAppContent: React.FC = () => {
           </span>
         </button>
       </div>
+
+      {/* Omni-Role Notification Center Drawer */}
+      <OmniNotificationCenter
+        isOpen={isNotificationCenterOpen}
+        onClose={closeNotificationCenter}
+        onNavigateToOrder={(orderId) => setActiveTrackingOrderId(orderId)}
+      />
 
       {/* Global Notifications System */}
       <ToastContainer />

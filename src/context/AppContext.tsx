@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import confetti from 'canvas-confetti';
 import { 
   User, UserRole, Restaurant, MenuItem, Order, Rider, 
-  Category, BannerPromo, PlatformSettings, Address, OrderItem, OrderStatus, Language, AloChatMessage 
+  Category, BannerPromo, PlatformSettings, Address, OrderItem, OrderStatus, Language, AloChatMessage, AppNotification 
 } from '../types';
 import { 
   INITIAL_RESTAURANTS, INITIAL_MENU_ITEMS, INITIAL_ORDERS, 
@@ -161,7 +161,7 @@ interface AppContextType {
   cartDeliveryFee: number;
   cartTotal: number;
   cartItemCount: number;
-  addToCart: (restaurant: Restaurant, item: MenuItem, quantity?: number) => void;
+  addToCart: (restaurant: Restaurant, item: MenuItem, quantity?: number, variation?: { name: string; price: number }) => void;
   updateCartQuantity: (menuItemId: string, delta: number) => void;
   removeFromCart: (menuItemId: string) => void;
   clearCart: () => void;
@@ -223,8 +223,29 @@ interface AppContextType {
   dismissNotification: (id: string) => void;
   triggerToast: (title: string, message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
   
+  // Omni-Role Notifications (Customer, Vendor, Rider, Admin cross-account real-time alerts)
+  appNotifications: AppNotification[];
+  unreadNotificationCount: number;
+  isNotificationCenterOpen: boolean;
+  setIsNotificationCenterOpen: (open: boolean) => void;
+  openNotificationCenter: () => void;
+  closeNotificationCenter: () => void;
+  markNotificationAsRead: (id: string) => void;
+  markAllNotificationsAsRead: () => void;
+  removeAppNotification: (id: string) => void;
+  clearAllAppNotifications: () => void;
+  isSoundEnabled: boolean;
+  setIsSoundEnabled: (enabled: boolean) => void;
+  triggerTestRoleNotification: (role: UserRole) => void;
+
   // Reset demo data
   resetToDefaultData: () => void;
+
+  // APK Download Modal
+  isApkModalOpen: boolean;
+  setIsApkModalOpen: (open: boolean) => void;
+  openApkModal: () => void;
+  closeApkModal: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -421,24 +442,332 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
+  // Omni-Role Notifications State (Persists even across logouts)
+  const [appNotifications, setAppNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_omni_notifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);
+  const [isApkModalOpen, setIsApkModalOpen] = useState(false);
+  const openApkModal = () => setIsApkModalOpen(true);
+  const closeApkModal = () => setIsApkModalOpen(false);
+  const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_sound_pref');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const setIsSoundEnabled = (val: boolean) => {
+    setIsSoundEnabledState(val);
+    localStorage.setItem(LOCAL_STORAGE_KEY + '_sound_pref', val ? 'true' : 'false');
+  };
+
+  const dispatchOmniNotification = (notification: Omit<AppNotification, 'id' | 'createdAt' | 'read' | 'timestamp'>) => {
+    const now = Date.now();
+    const newNotif: AppNotification = {
+      ...notification,
+      id: 'notif-' + now + '-' + Math.random().toString(36).substring(2, 6),
+      createdAt: now,
+      read: false,
+      timestamp: new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setAppNotifications(prev => {
+      const updated = [newNotif, ...prev.slice(0, 49)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_omni_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    if (isSoundEnabled) {
+      sounds.playIncomingAlert();
+    }
+
+    // Trigger desktop notification if permitted
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(newNotif.title, {
+          body: newNotif.message,
+          icon: '/favicon.ico'
+        });
+      } catch {}
+    }
+  };
+
+  const markNotificationAsRead = (id: string) => {
+    setAppNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_omni_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setAppNotifications(prev => {
+      const updated = prev.map(n => ({ ...n, read: true }));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_omni_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const removeAppNotification = (id: string) => {
+    setAppNotifications(prev => {
+      const updated = prev.filter(n => n.id !== id);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_omni_notifications', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const clearAllAppNotifications = () => {
+    setAppNotifications([]);
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_omni_notifications');
+    } catch {}
+  };
+
+  const openNotificationCenter = () => setIsNotificationCenterOpen(true);
+  const closeNotificationCenter = () => setIsNotificationCenterOpen(false);
+  const unreadNotificationCount = appNotifications.filter(n => !n.read).length;
+
+  const triggerTestRoleNotification = (role: UserRole) => {
+    const testNum = Math.floor(1000 + Math.random() * 9000);
+    if (role === 'vendor') {
+      dispatchOmniNotification({
+        targetRole: 'vendor',
+        title: `🔔 [Vendor] New Order #DST-${testNum}`,
+        message: `₨ 850 • 2x Chicken Biryani + 1x Raita from Ahmed Ali. Tap to accept & cook!`,
+        type: 'order',
+        action: { role: 'vendor' }
+      });
+    } else if (role === 'rider') {
+      dispatchOmniNotification({
+        targetRole: 'rider',
+        title: `🛵 [Rider Fleet] Delivery Request #DST-${testNum}`,
+        message: `Pickup at Shahi Bazaar Matli - ₨ 70 delivery fee. Tap to accept!`,
+        type: 'rider',
+        action: { role: 'rider' }
+      });
+    } else if (role === 'admin') {
+      dispatchOmniNotification({
+        targetRole: 'admin',
+        title: `👑 [Super Admin] New Matli Order #DST-${testNum}`,
+        message: `Live order recorded across Matli network (₨ 1,200).`,
+        type: 'system',
+        action: { role: 'admin' }
+      });
+    } else {
+      dispatchOmniNotification({
+        targetRole: 'customer',
+        title: `🛍️ [Customer] Order #DST-${testNum} Dispatched`,
+        message: `Rider is on the way to your address with hot meal!`,
+        type: 'status',
+        action: { role: 'customer' }
+      });
+    }
+  };
+
+  const initialOrdersLoadedRef = useRef(false);
+  const prevOrdersMapRef = useRef<Map<string, OrderStatus>>(new Map());
+
   // 1. Initial Firestore Seeding & Realtime Listeners
   useEffect(() => {
     // Seed initial data if Firestore is fresh
     seedInitialFirestoreData();
 
-    // Subscribe to real-time Orders
+    // Subscribe to real-time Orders with Omni-Role Notifications
     const unsubOrders = subscribeToOrders((liveOrders) => {
-      setOrders(liveOrders || []);
+      const ordersList = liveOrders || [];
+      setOrders(ordersList);
+
+      if (!initialOrdersLoadedRef.current) {
+        ordersList.forEach(o => prevOrdersMapRef.current.set(o.id, o.status));
+        initialOrdersLoadedRef.current = true;
+        return;
+      }
+
+      // Check for incoming orders or status transitions
+      ordersList.forEach(order => {
+        const prevStatus = prevOrdersMapRef.current.get(order.id);
+
+        if (!prevStatus) {
+          // BRAND NEW ORDER DETECTED
+          // 1. Vendor Alert
+          dispatchOmniNotification({
+            targetRole: 'vendor',
+            targetEntityId: order.restaurantId,
+            orderId: order.id,
+            title: `🔔 New Order #${order.orderNumber} (${order.restaurantName})`,
+            message: `₨ ${order.total} • ${order.items.length} items from ${order.customerName}. Accept & start preparing!`,
+            type: 'order',
+            action: {
+              role: 'vendor',
+              restaurantId: order.restaurantId,
+              orderId: order.id
+            }
+          });
+
+          // 2. Rider Alert
+          dispatchOmniNotification({
+            targetRole: 'rider',
+            orderId: order.id,
+            title: `🛵 Delivery Request #${order.orderNumber}`,
+            message: `Pickup at ${order.restaurantName} (${order.restaurantAddress || 'Matli'}) - ₨ ${order.deliveryFee} fare.`,
+            type: 'rider',
+            action: {
+              role: 'rider',
+              orderId: order.id
+            }
+          });
+
+          // 3. Admin Alert
+          dispatchOmniNotification({
+            targetRole: 'admin',
+            orderId: order.id,
+            title: `👑 New Matli Order #${order.orderNumber}`,
+            message: `Order for ${order.restaurantName} by ${order.customerName} (₨ ${order.total}).`,
+            type: 'system',
+            action: {
+              role: 'admin',
+              orderId: order.id
+            }
+          });
+
+          // 4. Customer Alert
+          dispatchOmniNotification({
+            targetRole: 'customer',
+            targetEntityId: order.customerId,
+            orderId: order.id,
+            title: `🛍️ Order #${order.orderNumber} Placed`,
+            message: `Sent to ${order.restaurantName}. We'll notify you as soon as the kitchen confirms.`,
+            type: 'status',
+            action: {
+              role: 'customer',
+              orderId: order.id
+            }
+          });
+        } else if (prevStatus !== order.status) {
+          // STATUS TRANSITION DETECTED
+          if (order.status === 'confirmed' || order.status === 'preparing') {
+            dispatchOmniNotification({
+              targetRole: 'customer',
+              targetEntityId: order.customerId,
+              orderId: order.id,
+              title: `🍳 Order #${order.orderNumber} Confirmed`,
+              message: `${order.restaurantName} is now preparing your food.`,
+              type: 'status',
+              action: { role: 'customer', orderId: order.id }
+            });
+            dispatchOmniNotification({
+              targetRole: 'rider',
+              orderId: order.id,
+              title: `🛵 Order #${order.orderNumber} Preparing`,
+              message: `Ready soon for pickup at ${order.restaurantName}.`,
+              type: 'rider',
+              action: { role: 'rider', orderId: order.id }
+            });
+          } else if (order.status === 'out_for_delivery') {
+            dispatchOmniNotification({
+              targetRole: 'customer',
+              targetEntityId: order.customerId,
+              orderId: order.id,
+              title: `🚀 Order #${order.orderNumber} Out for Delivery!`,
+              message: `Rider ${order.riderName || 'assigned'} has picked up your food and is on the way!`,
+              type: 'status',
+              action: { role: 'customer', orderId: order.id }
+            });
+            dispatchOmniNotification({
+              targetRole: 'vendor',
+              targetEntityId: order.restaurantId,
+              orderId: order.id,
+              title: `📦 Order #${order.orderNumber} Dispatched`,
+              message: `Rider ${order.riderName || ''} is delivering to customer.`,
+              type: 'vendor',
+              action: { role: 'vendor', restaurantId: order.restaurantId, orderId: order.id }
+            });
+          } else if (order.status === 'delivered') {
+            dispatchOmniNotification({
+              targetRole: 'customer',
+              targetEntityId: order.customerId,
+              orderId: order.id,
+              title: `🎉 Order #${order.orderNumber} Delivered!`,
+              message: `Enjoy your meal from ${order.restaurantName}!`,
+              type: 'status',
+              action: { role: 'customer', orderId: order.id }
+            });
+            dispatchOmniNotification({
+              targetRole: 'vendor',
+              targetEntityId: order.restaurantId,
+              orderId: order.id,
+              title: `💰 Order #${order.orderNumber} Completed`,
+              message: `Delivered to ${order.customerName}.`,
+              type: 'vendor',
+              action: { role: 'vendor', restaurantId: order.restaurantId, orderId: order.id }
+            });
+            dispatchOmniNotification({
+              targetRole: 'admin',
+              orderId: order.id,
+              title: `✅ Order #${order.orderNumber} Delivered`,
+              message: `Delivery completed in Matli (₨ ${order.total}).`,
+              type: 'system',
+              action: { role: 'admin', orderId: order.id }
+            });
+          } else if (order.status === 'cancelled') {
+            dispatchOmniNotification({
+              targetRole: 'customer',
+              targetEntityId: order.customerId,
+              orderId: order.id,
+              title: `❌ Order #${order.orderNumber} Cancelled`,
+              message: order.cancelReason || 'Order was cancelled.',
+              type: 'status',
+              action: { role: 'customer', orderId: order.id }
+            });
+            dispatchOmniNotification({
+              targetRole: 'vendor',
+              targetEntityId: order.restaurantId,
+              orderId: order.id,
+              title: `❌ Order #${order.orderNumber} Cancelled`,
+              message: order.cancelReason || 'Order was cancelled.',
+              type: 'vendor',
+              action: { role: 'vendor', restaurantId: order.restaurantId, orderId: order.id }
+            });
+          }
+        }
+
+        prevOrdersMapRef.current.set(order.id, order.status);
+      });
     });
 
     // Subscribe to real-time Restaurants
     const unsubRestaurants = subscribeToRestaurants((liveRest) => {
-      setRestaurants(liveRest || []);
+      if (liveRest && liveRest.length > 0) {
+        setRestaurants(liveRest);
+      } else {
+        setRestaurants(INITIAL_RESTAURANTS);
+      }
     });
 
     // Subscribe to real-time Menu Items
     const unsubMenu = subscribeToMenuItems((liveMenu) => {
-      setMenuItems(liveMenu || []);
+      if (liveMenu && liveMenu.length > 0) {
+        setMenuItems(liveMenu);
+      } else {
+        setMenuItems(INITIAL_MENU_ITEMS);
+      }
     });
 
     // Subscribe to real-time Riders
@@ -491,7 +820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubUsers();
       unsubAuth();
     };
-  }, []);
+  }, [isSoundEnabled]);
 
   const lastToastRef = useRef<{ title: string; message: string; time: number }>({ title: '', message: '', time: 0 });
 
@@ -533,8 +862,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cartTotal = Math.max(0, cartSubtotal + cartDeliveryFee - cart.discount);
   const cartItemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
-  const addToCart = (restaurant: Restaurant, item: MenuItem, quantity: number = 1) => {
+  const addToCart = (
+    restaurant: Restaurant, 
+    item: MenuItem, 
+    quantity: number = 1,
+    variation?: { name: string; price: number }
+  ) => {
     sounds.playClick();
+    const finalPrice = variation ? variation.price : (item.discountedPrice || item.price);
+    const finalName = variation ? `${item.name} (${variation.name})` : item.name;
+
     setCart(prev => {
       if (prev.restaurantId && prev.restaurantId !== restaurant.id && prev.items.length > 0) {
         triggerToast('Cart Replaced', `Switched cart items to ${restaurant.name}`, 'warning');
@@ -543,9 +880,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           items: [{
             id: 'ci-' + Date.now(),
             menuItemId: item.id,
-            name: item.name,
-            price: item.discountedPrice || item.price,
+            name: finalName,
+            price: finalPrice,
             quantity: quantity,
+            selectedVariation: variation?.name,
             image: item.image
           }],
           specialInstructions: '',
@@ -554,7 +892,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
 
-      const existingIndex = prev.items.findIndex(i => i.menuItemId === item.id);
+      const existingIndex = prev.items.findIndex(
+        i => i.menuItemId === item.id && (variation ? i.selectedVariation === variation.name : !i.selectedVariation)
+      );
       let updatedItems: OrderItem[];
 
       if (existingIndex > -1) {
@@ -566,15 +906,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             id: 'ci-' + Date.now() + '-' + Math.random().toString(36).substring(2, 5),
             menuItemId: item.id,
-            name: item.name,
-            price: item.discountedPrice || item.price,
+            name: finalName,
+            price: finalPrice,
             quantity: quantity,
+            selectedVariation: variation?.name,
             image: item.image
           }
         ];
       }
 
-      triggerToast('Added to Cart', `${item.name} added (₨ ${item.discountedPrice || item.price})`, 'success');
+      triggerToast('Added to Cart', `${finalName} added (₨ ${finalPrice})`, 'success');
 
       return {
         ...prev,
@@ -1562,7 +1903,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         notifications,
         dismissNotification,
         triggerToast,
-        resetToDefaultData
+        appNotifications,
+        unreadNotificationCount,
+        isNotificationCenterOpen,
+        setIsNotificationCenterOpen,
+        openNotificationCenter,
+        closeNotificationCenter,
+        markNotificationAsRead,
+        markAllNotificationsAsRead,
+        removeAppNotification,
+        clearAllAppNotifications,
+        isSoundEnabled,
+        setIsSoundEnabled,
+        triggerTestRoleNotification,
+        resetToDefaultData,
+        isApkModalOpen,
+        setIsApkModalOpen,
+        openApkModal,
+        closeApkModal
       }}
     >
       {children}

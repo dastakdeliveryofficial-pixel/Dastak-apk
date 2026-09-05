@@ -72,6 +72,18 @@ export async function seedInitialFirestoreData() {
         await setDoc(doc(db, PROMOS_COLLECTION, p.id), p);
       }
     }
+
+    // Check if restaurants are seeded
+    const restSnap = await getDocs(collection(db, RESTAURANTS_COLLECTION));
+    if (restSnap.empty && INITIAL_RESTAURANTS.length > 0) {
+      console.log('Seeding Dastak restaurants & catalog to Firestore...');
+      for (const r of INITIAL_RESTAURANTS) {
+        await setDoc(doc(db, RESTAURANTS_COLLECTION, r.id), r);
+      }
+      for (const m of INITIAL_MENU_ITEMS) {
+        await setDoc(doc(db, MENU_ITEMS_COLLECTION, m.id), m);
+      }
+    }
   } catch (err) {
     console.error('Firestore seeding note:', err);
   }

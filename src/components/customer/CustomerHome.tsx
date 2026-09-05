@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { 
   Search, Star, Clock, ShoppingBag, Flame, Sparkles, 
   MapPin, Percent, ChevronRight, Check, Utensils, MessageCircle,
-  Store, Bike, KeyRound, UserPlus
+  Store, Bike, KeyRound, UserPlus, Download, Smartphone
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem } from '../../types';
@@ -44,7 +44,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     getItemName,
     getItemDesc,
     getCategoryName,
-    getPromoContent
+    getPromoContent,
+    openApkModal
   } = useApp();
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'top_rated' | 'low_fee' | 'deals'>('all');
@@ -244,6 +245,36 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* Android APK Download Card Banner */}
+          <div className="pt-2">
+            <div className="bg-linear-to-r from-pink-900 via-rose-900 to-pink-950 text-white rounded-2xl p-3.5 sm:p-4 shadow-sm border border-pink-700/40 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 text-center sm:text-left">
+                <div className="w-10 h-10 rounded-xl bg-pink-500/30 border border-pink-400/40 flex items-center justify-center shrink-0">
+                  <Smartphone className="w-5 h-5 text-pink-300" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-[#E11D74] px-2 py-0.5 rounded-md text-white">
+                      Android .APK
+                    </span>
+                    <span className="text-xs font-bold text-pink-200">Dastak Delivery Mobile App</span>
+                  </div>
+                  <p className="text-[11px] text-pink-100/90 mt-0.5">
+                    موبائل پر تیز آرڈرنگ، لائیو رائیڈر ٹریکنگ اور فوری نوٹیفیکیشنز حاصل کریں۔
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={openApkModal}
+                className="w-full sm:w-auto bg-linear-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-transform active:scale-95 shrink-0"
+              >
+                <Download className="w-4 h-4" />
+                <span>Download APK / انسٹال کریں</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -76,12 +76,39 @@ export const CATEGORIES: Category[] = [
     itemCount: 0
   },
   {
+    id: 'pizza',
+    name: 'Pizza & Fast Food',
+    nameUrdu: 'پیزا اور فاسٹ فوڈ',
+    nameSindhi: 'پيزا ۽ فاسٽ فوڊ',
+    iconName: 'Pizza',
+    image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=500&auto=format&fit=crop&q=80',
+    itemCount: 0
+  },
+  {
     id: 'deals',
     name: 'Super Combo Deals',
     nameUrdu: 'سپیشل ڈیلز',
     nameSindhi: 'خاص ڪومبو ڊيلز',
     iconName: 'Sparkles',
     image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&auto=format&fit=crop&q=80',
+    itemCount: 0
+  },
+  {
+    id: 'grocery',
+    name: 'Grocery & Mart',
+    nameUrdu: 'گروسری اور راشن',
+    nameSindhi: 'گروسري ۽ راشن',
+    iconName: 'ShoppingBag',
+    image: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=500&auto=format&fit=crop&q=80',
+    itemCount: 0
+  },
+  {
+    id: 'pharmacy',
+    name: 'Medicines & Health',
+    nameUrdu: 'ادویات اور فارمیسی',
+    nameSindhi: 'دوائون ۽ صحت',
+    iconName: 'HeartPulse',
+    image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=500&auto=format&fit=crop&q=80',
     itemCount: 0
   }
 ];
@@ -117,9 +144,11 @@ export const BANNER_PROMOS: BannerPromo[] = [
   }
 ];
 
-export const INITIAL_RESTAURANTS: Restaurant[] = [];
+import { DASTAK_RESTAURANTS, DASTAK_MENU_ITEMS } from './dastakCatalog';
 
-export const INITIAL_MENU_ITEMS: MenuItem[] = [];
+export const INITIAL_RESTAURANTS: Restaurant[] = DASTAK_RESTAURANTS;
+
+export const INITIAL_MENU_ITEMS: MenuItem[] = DASTAK_MENU_ITEMS;
 
 export const INITIAL_RIDERS: Rider[] = [];
 

@@ -45,6 +45,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
 
   const [selectedCat, setSelectedCat] = useState<string>('all');
   const [searchItem, setSearchItem] = useState<string>('');
+  const [selectedVariations, setSelectedVariations] = useState<Record<string, { name: string; price: number }>>({});
 
   const restName = getRestaurantName(restaurant);
   const restDesc = getRestaurantDesc(restaurant);
@@ -258,8 +259,9 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
                           )}
                         </div>
 
-                        <h3 className="font-bold text-sm sm:text-base text-gray-900 mt-1">
-                          {itemName}
+                        <h3 className="font-bold text-sm sm:text-base text-gray-900 mt-1 flex items-center gap-1.5 flex-wrap">
+                          {item.emoji && <span className="text-base shrink-0">{item.emoji}</span>}
+                          <span>{itemName}</span>
                         </h3>
                         <p className="text-xs text-gray-400 mt-1 line-clamp-2 leading-relaxed">
                           {itemDesc}
@@ -270,58 +272,102 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
                             {item.comboItems.join(' • ')}
                           </div>
                         )}
+
+                        {/* Variations Selection if available */}
+                        {item.variationTypes && item.variationTypes.length > 0 && (
+                          <div className="mt-2.5 space-y-1.5">
+                            {item.variationTypes.map((vt, vidx) => {
+                              const activeOption = selectedVariations[item.id] || vt.options[0];
+                              return (
+                                <div key={vidx} className="space-y-1">
+                                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{vt.type}:</span>
+                                  <div className="flex flex-wrap gap-1">
+                                    {vt.options.map((opt, oidx) => {
+                                      const isSelected = activeOption?.name === opt.name;
+                                      return (
+                                        <button
+                                          key={oidx}
+                                          type="button"
+                                          onClick={() => setSelectedVariations(prev => ({ ...prev, [item.id]: opt }))}
+                                          className={`text-[10px] px-2 py-0.5 rounded-md font-bold border transition-all ${
+                                            isSelected
+                                              ? 'bg-[#E11D74] text-white border-[#E11D74] shadow-xs'
+                                              : 'bg-white text-gray-700 border-pink-200 hover:bg-pink-50'
+                                          }`}
+                                        >
+                                          {opt.name} · ₨ {opt.price}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {/* Pricing & Add to Cart Controls */}
-                      <div className="flex items-center justify-between pt-3 mt-2 border-t border-pink-100">
-                        <div>
-                          <div className="flex items-baseline gap-1.5">
-                            <span className="text-base font-black text-gray-900">
-                              ₨ {item.discountedPrice || item.price}
-                            </span>
-                            {item.discountedPrice && (
-                              <span className="text-xs text-gray-400 line-through">
-                                ₨ {item.price}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Quantity / Add Button */}
-                        <div>
-                          {!item.isAvailable ? (
-                            <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
-                              Sold Out
-                            </span>
-                          ) : quantityInCart > 0 ? (
-                            <div className="flex items-center gap-2 bg-pink-950 text-white rounded-xl px-2 py-1 shadow-xs">
-                              <button
-                                onClick={() => updateCartQuantity(item.id, -1)}
-                                className="w-6 h-6 rounded-lg bg-pink-900 hover:bg-pink-800 flex items-center justify-center text-pink-300 font-bold transition-colors"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="text-xs font-bold w-4 text-center">{quantityInCart}</span>
-                              <button
-                                onClick={() => updateCartQuantity(item.id, 1)}
-                                className="w-6 h-6 rounded-lg bg-pink-900 hover:bg-pink-800 flex items-center justify-center text-pink-300 font-bold transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
+                      {(() => {
+                        const activeVariation = selectedVariations[item.id] || (item.variationTypes?.[0]?.options?.[0]);
+                        const currentPrice = activeVariation ? activeVariation.price : (item.discountedPrice || item.price);
+                        return (
+                          <div className="flex items-center justify-between pt-3 mt-2 border-t border-pink-100">
+                            <div>
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="text-base font-black text-gray-900">
+                                  ₨ {currentPrice}
+                                </span>
+                                {item.discountedPrice && !activeVariation && (
+                                  <span className="text-xs text-gray-400 line-through">
+                                    ₨ {item.price}
+                                  </span>
+                                )}
+                              </div>
+                              {activeVariation && (
+                                <span className="text-[9px] text-[#E11D74] font-semibold block">
+                                  {activeVariation.name}
+                                </span>
+                              )}
                             </div>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                addToCart(restaurant, item, 1);
-                              }}
-                              className="bg-gradient-to-r from-[#E11D74] to-[#D81B60] hover:from-[#C2185B] hover:to-[#AD1457] text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                              <span>{t.add}</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
+
+                            {/* Quantity / Add Button */}
+                            <div>
+                              {!item.isAvailable ? (
+                                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                                  Sold Out
+                                </span>
+                              ) : quantityInCart > 0 ? (
+                                <div className="flex items-center gap-2 bg-pink-950 text-white rounded-xl px-2 py-1 shadow-xs">
+                                  <button
+                                    onClick={() => updateCartQuantity(item.id, -1)}
+                                    className="w-6 h-6 rounded-lg bg-pink-900 hover:bg-pink-800 flex items-center justify-center text-pink-300 font-bold transition-colors"
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="text-xs font-bold w-4 text-center">{quantityInCart}</span>
+                                  <button
+                                    onClick={() => updateCartQuantity(item.id, 1)}
+                                    className="w-6 h-6 rounded-lg bg-pink-900 hover:bg-pink-800 flex items-center justify-center text-pink-300 font-bold transition-colors"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    addToCart(restaurant, item, 1, activeVariation);
+                                  }}
+                                  className="bg-gradient-to-r from-[#E11D74] to-[#D81B60] hover:from-[#C2185B] hover:to-[#AD1457] text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-xs transition-colors flex items-center gap-1"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>{t.add}</span>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Item Image */}

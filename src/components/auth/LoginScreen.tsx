@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, Store, Bike, ShieldAlert, KeyRound, Mail, 
   LogIn, UserPlus, Eye, EyeOff, AlertCircle,
-  MapPin, CheckCircle2, Phone, Lock, Sparkles, Loader2
+  MapPin, CheckCircle2, Phone, Lock, Sparkles, Loader2, Bell, Download
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -25,7 +25,10 @@ export const LoginScreen: React.FC = () => {
     riders,
     triggerToast,
     language,
-    setLanguage 
+    setLanguage,
+    unreadNotificationCount,
+    openNotificationCenter,
+    openApkModal
   } = useApp();
 
   const [selectedRole, setSelectedRole] = useState<UserRole>('customer');
@@ -234,21 +237,50 @@ export const LoginScreen: React.FC = () => {
           </div>
         </div>
 
-        {/* Language Selector */}
-        <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-xs border border-pink-100">
-          {(['en', 'ur', 'sd'] as const).map(lang => (
-            <button
-              key={lang}
-              onClick={() => setLanguage(lang)}
-              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                language === lang 
-                  ? 'bg-[#E11D74] text-white shadow-xs' 
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-pink-50'
-              }`}
-            >
-              {lang === 'en' ? 'English' : lang === 'ur' ? 'اردو' : 'سنڌي'}
-            </button>
-          ))}
+        {/* Header Actions: Download APK, Omni Notification Bell & Language */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={openApkModal}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-xs transition-transform active:scale-95"
+            title="Download APK / Install Android App"
+          >
+            <Download className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Download APK</span>
+            <span className="sm:hidden text-[11px]">APK</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openNotificationCenter}
+            className="relative p-2 bg-white/90 backdrop-blur-sm rounded-xl shadow-xs border border-pink-100 text-gray-700 hover:text-[#E11D74] transition-colors"
+            title="Omni-Role Notifications"
+          >
+            <Bell className="w-4 h-4 text-[#E11D74]" />
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#E11D74] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs animate-pulse">
+                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+              </span>
+            )}
+          </button>
+
+          {/* Language Selector */}
+          <div className="flex items-center gap-1 bg-white/90 backdrop-blur-sm p-1 rounded-xl shadow-xs border border-pink-100">
+            {(['en', 'ur', 'sd'] as const).map(lang => (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => setLanguage(lang)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
+                  language === lang 
+                    ? 'bg-[#E11D74] text-white shadow-xs' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-pink-50'
+                }`}
+              >
+                {lang === 'en' ? 'English' : lang === 'ur' ? 'اردو' : 'سنڌي'}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 

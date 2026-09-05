@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShoppingBag, MapPin, ChevronDown, User, Clock, Globe, Check,
   LogIn, LogOut, KeyRound, ShieldAlert, Store, Bike,
-  Smartphone, Download, ShieldCheck
+  Smartphone, Download, ShieldCheck, Bell
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole, Language } from '../../types';
@@ -42,7 +42,10 @@ export const Header: React.FC<HeaderProps> = ({
     language,
     setLanguage,
     t,
-    getRestaurantName
+    getRestaurantName,
+    unreadNotificationCount,
+    openNotificationCenter,
+    openApkModal
   } = useApp();
 
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
@@ -223,6 +226,31 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
           )}
+
+          {/* Download APK / Android App Button */}
+          <button
+            onClick={openApkModal}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-xs transition-transform active:scale-95"
+            title="Download APK / Install Android App"
+          >
+            <Download className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Download APK</span>
+            <span className="sm:hidden text-[11px]">APK</span>
+          </button>
+
+          {/* Omni Notification Bell */}
+          <button
+            onClick={openNotificationCenter}
+            className="relative p-2 rounded-xl border border-pink-200/80 bg-white/80 hover:bg-pink-50 text-gray-700 hover:text-[#E11D74] transition-colors"
+            title="Omni-Role Notifications"
+          >
+            <Bell className="w-4 h-4 text-[#E11D74]" />
+            {unreadNotificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-[#E11D74] text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs animate-pulse">
+                {unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}
+              </span>
+            )}
+          </button>
 
           {/* Language Selector Dropdown */}
           <div className="relative">
