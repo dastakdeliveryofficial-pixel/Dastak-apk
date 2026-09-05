@@ -152,6 +152,17 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = DASTAK_MENU_ITEMS;
 
 export const INITIAL_RIDERS: Rider[] = [];
 
-export const INITIAL_CUSTOMERS: User[] = [];
+export const INITIAL_CUSTOMERS: User[] = [
+  {
+    id: 'customer-matli-1',
+    name: 'Matli Customer',
+    phone: '0300-1234567',
+    email: 'customer@dastak.pk',
+    role: 'customer',
+    addresses: [],
+    isBlocked: false,
+    createdAt: new Date().toISOString()
+  }
+];
 
 export const INITIAL_ORDERS: Order[] = [];

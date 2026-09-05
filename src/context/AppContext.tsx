@@ -312,10 +312,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.isAuthenticated && parsed.currentUser) {
+          const user = parsed.currentUser;
+          const sanitizedUser: User = {
+            ...defaultGuestUser,
+            ...user,
+            addresses: Array.isArray(user.addresses) ? user.addresses : []
+          };
           return {
             isAuthenticated: true,
-            currentUser: parsed.currentUser as User,
-            currentRole: (parsed.currentRole || parsed.currentUser.role || 'customer') as UserRole,
+            currentUser: sanitizedUser,
+            currentRole: (parsed.currentRole || sanitizedUser.role || 'customer') as UserRole,
             activeVendorRestaurantId: (parsed.activeVendorRestaurantId || 'rest-1') as string,
             activeRiderId: (parsed.activeRiderId || 'rider-1') as string
           };
@@ -324,9 +330,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.error('Error restoring auth session:', e);
     }
+    const fallbackUser: User = INITIAL_CUSTOMERS[0] || defaultGuestUser;
     return {
       isAuthenticated: false,
-      currentUser: INITIAL_CUSTOMERS[0] || defaultGuestUser,
+      currentUser: {
+        ...fallbackUser,
+        addresses: Array.isArray(fallbackUser?.addresses) ? fallbackUser.addresses : []
+      },
       currentRole: 'customer' as UserRole,
       activeVendorRestaurantId: 'rest-1',
       activeRiderId: 'rider-1'
@@ -380,8 +390,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     vendorRestId?: string,
     riderId?: string
   ) => {
+    const fallbackUser: User = INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const safeUser: User = user && user.id ? {
+      ...defaultGuestUser,
+      ...user,
+      addresses: Array.isArray(user.addresses) ? user.addresses : []
+    } : fallbackUser;
+
     setIsAuthenticatedState(authed);
-    setCurrentUserState(user);
+    setCurrentUserState(safeUser);
     setCurrentRoleState(role);
     if (vendorRestId) setActiveVendorRestaurantIdState(vendorRestId);
     if (riderId) setActiveRiderIdState(riderId);
@@ -390,7 +407,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const payload = {
           isAuthenticated: true,
-          currentUser: user,
+          currentUser: safeUser,
           currentRole: role,
           activeVendorRestaurantId: vendorRestId || activeVendorRestaurantId,
           activeRiderId: riderId || activeRiderId
@@ -892,14 +909,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (firebaseUser) {
         try {
           const userDocSnap = await getDoc(doc(db, 'users', firebaseUser.uid));
-          let resolvedUser: User;
+          let resolvedUser: User | null = null;
           if (userDocSnap.exists()) {
             resolvedUser = userDocSnap.data() as User;
           } else {
             const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
             if (saved) {
-              resolvedUser = JSON.parse(saved).currentUser;
-            } else {
+              try {
+                resolvedUser = JSON.parse(saved).currentUser;
+              } catch {}
+            }
+            if (!resolvedUser || !resolvedUser.id) {
               resolvedUser = {
                 id: firebaseUser.uid,
                 name: firebaseUser.displayName || (firebaseUser.email?.split('@')[0] ?? 'Matli Customer'),
@@ -912,7 +932,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               };
             }
           }
-          syncAuthSession(true, resolvedUser, resolvedUser.role);
+          const safeUser: User = {
+            ...defaultGuestUser,
+            ...resolvedUser,
+            addresses: Array.isArray(resolvedUser?.addresses) ? resolvedUser.addresses : []
+          };
+          syncAuthSession(true, safeUser, safeUser.role);
         } catch (err) {
           console.error('Error checking auth user profile:', err);
         }
@@ -920,9 +945,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // User logged out
         const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
         if (!saved) {
+          const fallbackUser = INITIAL_CUSTOMERS[0] || defaultGuestUser;
           setIsAuthenticatedState(false);
           setCurrentRoleState('customer');
-          setCurrentUserState(INITIAL_CUSTOMERS[0]);
+          setCurrentUserState(fallbackUser);
         }
       }
     });
@@ -1117,59 +1143,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Addresses
-  const addresses = currentUser.addresses || [];
+  const addresses = (currentUser && Array.isArray(currentUser.addresses)) ? currentUser.addresses : [];
 
   const addAddress = async (newAddr: Omit<Address, 'id'>) => {
+    const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const currentAddrs = Array.isArray(safeUser.addresses) ? safeUser.addresses : [];
     const addressWithId: Address = {
       ...newAddr,
       id: 'addr-' + Date.now(),
-      isDefault: addresses.length === 0 ? true : !!newAddr.isDefault
+      isDefault: currentAddrs.length === 0 ? true : !!newAddr.isDefault
     };
 
     const updatedAddresses = addressWithId.isDefault
-      ? [...addresses.map(a => ({ ...a, isDefault: false })), addressWithId]
-      : [...addresses, addressWithId];
+      ? [...currentAddrs.map(a => ({ ...a, isDefault: false })), addressWithId]
+      : [...currentAddrs, addressWithId];
 
-    const updatedUser = { ...currentUser, addresses: updatedAddresses };
+    const updatedUser = { ...safeUser, addresses: updatedAddresses };
     setCurrentUser(updatedUser);
     
-    try {
-      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updatedAddresses });
-    } catch {
-      // Local fallback
+    if (safeUser.id) {
+      try {
+        await updateDoc(doc(db, 'users', safeUser.id), { addresses: updatedAddresses });
+      } catch {
+        // Local fallback
+      }
     }
 
     triggerToast('Address Saved', `Added ${newAddr.label} in ${newAddr.area}`, 'success');
   };
 
   const deleteAddress = async (id: string) => {
-    const updated = addresses.filter(a => a.id !== id);
-    const updatedUser = { ...currentUser, addresses: updated };
+    const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const currentAddrs = Array.isArray(safeUser.addresses) ? safeUser.addresses : [];
+    const updated = currentAddrs.filter(a => a.id !== id);
+    const updatedUser = { ...safeUser, addresses: updated };
     setCurrentUser(updatedUser);
-    try {
-      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updated });
-    } catch {}
+    if (safeUser.id) {
+      try {
+        await updateDoc(doc(db, 'users', safeUser.id), { addresses: updated });
+      } catch {}
+    }
   };
 
   const setDefaultAddress = async (id: string) => {
-    const updated = addresses.map(a => ({ ...a, isDefault: a.id === id }));
-    const updatedUser = { ...currentUser, addresses: updated };
+    const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const currentAddrs = Array.isArray(safeUser.addresses) ? safeUser.addresses : [];
+    const updated = currentAddrs.map(a => ({ ...a, isDefault: a.id === id }));
+    const updatedUser = { ...safeUser, addresses: updated };
     setCurrentUser(updatedUser);
-    try {
-      await updateDoc(doc(db, 'users', currentUser.id), { addresses: updated });
-    } catch {}
+    if (safeUser.id) {
+      try {
+        await updateDoc(doc(db, 'users', safeUser.id), { addresses: updated });
+      } catch {}
+    }
   };
 
   // Real Order Creation in Firestore
   const placeOrder = async (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa'): Promise<Order> => {
     const restaurant = restaurants.find(r => r.id === cart.restaurantId) || restaurants[0];
     const orderNum = 'DST-' + Math.floor(1000 + Math.random() * 9000);
+    const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
 
     const orderData: Omit<Order, 'id'> = {
       orderNumber: orderNum,
-      customerId: currentUser.id,
-      customerName: currentUser.name,
-      customerPhone: deliveryAddress.phone || currentUser.phone,
+      customerId: safeUser.id || 'guest-customer',
+      customerName: safeUser.name || 'Matli Customer',
+      customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
       restaurantId: restaurant.id,
       restaurantName: restaurant.name,
       restaurantPhone: restaurant.phone,
@@ -1209,8 +1248,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await createFirestoreNotification({
         orderId: createdOrder.id,
         orderNumber: orderNum,
-        customerName: currentUser.name || deliveryAddress.phone || 'Matli Customer',
-        customerPhone: deliveryAddress.phone || currentUser.phone,
+        customerName: safeUser.name || deliveryAddress.phone || 'Matli Customer',
+        customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
         restaurantName: restaurant.name,
         items: itemsFormatted,
         total: cartTotal,
@@ -1500,12 +1539,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentUser = (user: User) => {
-    setCurrentUserState(user);
+    const fallbackUser = INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const safeUser: User = user && user.id ? {
+      ...defaultGuestUser,
+      ...user,
+      addresses: Array.isArray(user.addresses) ? user.addresses : []
+    } : fallbackUser;
+    setCurrentUserState(safeUser);
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
       if (saved) {
         const parsed = JSON.parse(saved);
-        parsed.currentUser = user;
+        parsed.currentUser = safeUser;
         localStorage.setItem(LOCAL_STORAGE_KEY + '_auth_session', JSON.stringify(parsed));
       }
     } catch {}
@@ -1870,7 +1915,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // 2. Reset React state synchronously
       setIsAuthenticatedState(false);
       setCurrentRoleState('customer');
-      setCurrentUserState(INITIAL_CUSTOMERS[0]);
+      setCurrentUserState(INITIAL_CUSTOMERS[0] || defaultGuestUser);
       setSelectedRestaurant(null);
       setTrackingOrderId(null);
       setIsAuthModalOpen(false);
@@ -1953,7 +1998,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetToDefaultData = () => {
     setAllUsers(INITIAL_CUSTOMERS);
-    setCurrentUser(INITIAL_CUSTOMERS[0]);
+    setCurrentUser(INITIAL_CUSTOMERS[0] || defaultGuestUser);
     setRestaurants(INITIAL_RESTAURANTS);
     setMenuItems(INITIAL_MENU_ITEMS);
     setOrders(INITIAL_ORDERS);

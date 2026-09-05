@@ -28,9 +28,9 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
 
   // Filter orders for the current customer (matching by customerId, phone, or name)
   const customerOrders = orders.filter(o => {
-    const isOwner = o.customerId === currentUser.id || 
-                    (currentUser.phone && o.customerPhone === currentUser.phone) ||
-                    (currentUser.name && o.customerName === currentUser.name);
+    const isOwner = (currentUser?.id && o.customerId === currentUser.id) || 
+                    (currentUser?.phone && o.customerPhone === currentUser.phone) ||
+                    (currentUser?.name && o.customerName === currentUser.name);
     return isOwner;
   });
 

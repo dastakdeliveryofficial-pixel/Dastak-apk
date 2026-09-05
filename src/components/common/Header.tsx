@@ -301,7 +301,7 @@ export const Header: React.FC<HeaderProps> = ({
               <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-pink-100 p-3 z-50">
                 <div className="pb-2 border-b border-pink-100 flex items-center justify-between">
                   <div>
-                    <p className="font-bold text-xs text-gray-800">{currentUser.name}</p>
+                    <p className="font-bold text-xs text-gray-800">{currentUser?.name || 'Customer'}</p>
                     <p className="text-[10px] text-gray-400 uppercase tracking-wider">{currentRole}</p>
                     {currentRole === 'customer' && (
                       <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-[#E11D74] bg-pink-50 px-1.5 py-0.5 rounded border border-pink-200">

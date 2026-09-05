@@ -54,8 +54,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   // Direct guest ordering fields (no map pin or email needed)
   const [isGuestMode, setIsGuestMode] = useState(addresses.length === 0);
-  const [guestName, setGuestName] = useState(currentUser.name || '');
-  const [guestPhone, setGuestPhone] = useState(currentUser.phone || '0300-1234567');
+  const [guestName, setGuestName] = useState(currentUser?.name || '');
+  const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '0300-1234567');
   const [guestArea, setGuestArea] = useState('Shahi Bazaar');
   const [guestStreetAddress, setGuestStreetAddress] = useState('');
   const [guestLandmark, setGuestLandmark] = useState('');

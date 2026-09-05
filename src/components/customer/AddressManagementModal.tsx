@@ -22,7 +22,7 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
   const [area, setArea] = useState<string>(MATLI_AREAS[0]);
   const [streetAddress, setStreetAddress] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [phone, setPhone] = useState(currentUser.phone || '0300-9876543');
+  const [phone, setPhone] = useState(currentUser?.phone || '0300-9876543');
   const [isDefault, setIsDefault] = useState(true);
 
   if (!isOpen) return null;
