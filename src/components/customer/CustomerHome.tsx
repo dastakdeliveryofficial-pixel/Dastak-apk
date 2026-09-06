@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { 
   Search, Star, Clock, ShoppingBag, Flame, Sparkles, 
   MapPin, Percent, ChevronRight, Check, Utensils, MessageCircle,
-  Store, Bike, KeyRound, UserPlus, Download, Smartphone
+  Store, Bike, KeyRound, UserPlus, Download, Smartphone,
+  Plus, Minus, X, Coffee, HeartPulse, Filter, ArrowRight, Tag, UtensilsCrossed
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem } from '../../types';
@@ -15,6 +16,266 @@ interface CustomerHomeProps {
   onTrackOrder?: (orderId: string) => void;
   onOpenHistory?: () => void;
 }
+
+// Helper to check if an item belongs to a category ID
+export const matchItemToCategory = (item: MenuItem, catId: string): boolean => {
+  const normCat = (item.category || '').toLowerCase();
+  const normName = (item.name || '').toLowerCase();
+  const normUrdu = (item.nameUrdu || '').toLowerCase();
+  const normSindhi = (item.nameSindhi || '').toLowerCase();
+  const normDesc = (item.description || '').toLowerCase();
+
+  switch (catId) {
+    case 'biryani':
+      return (
+        normCat.includes('biryani') ||
+        normCat.includes('pulao') ||
+        normCat.includes('rice') ||
+        normName.includes('biryani') ||
+        normName.includes('pulao') ||
+        normName.includes('rice') ||
+        normName.includes('chawal') ||
+        normUrdu.includes('بریانی') ||
+        normUrdu.includes('پلاؤ') ||
+        normUrdu.includes('چاول') ||
+        normSindhi.includes('برياني') ||
+        normSindhi.includes('پلاء') ||
+        item.restaurantId === 'almadina'
+      );
+
+    case 'drinks':
+      return (
+        normCat.includes('drink') ||
+        normCat.includes('beverage') ||
+        normCat.includes('chai') ||
+        normCat.includes('side') ||
+        normCat.includes('snack') ||
+        normName.includes('chai') ||
+        normName.includes('tea') ||
+        normName.includes('doodh patti') ||
+        normName.includes('shake') ||
+        normName.includes('lassi') ||
+        normName.includes('juice') ||
+        normName.includes('coffee') ||
+        normName.includes('pepsi') ||
+        normName.includes('coke') ||
+        normName.includes('7up') ||
+        normName.includes('marinda') ||
+        normName.includes('mirinda') ||
+        normName.includes('sting') ||
+        normName.includes('water') ||
+        normName.includes('dew') ||
+        normName.includes('drink') ||
+        normUrdu.includes('چائے') ||
+        normUrdu.includes('شیک') ||
+        normUrdu.includes('لسی') ||
+        normUrdu.includes('شربت') ||
+        normUrdu.includes('کافی') ||
+        normUrdu.includes('دودھ پتی') ||
+        normSindhi.includes('چانهه') ||
+        normSindhi.includes('لسي') ||
+        normSindhi.includes('شربت') ||
+        item.emoji === '☕' ||
+        item.emoji === '🥤' ||
+        item.emoji === '🧃'
+      );
+
+    case 'pharmacy':
+      return (
+        item.restaurantId === 'medical' ||
+        normCat.includes('medicine') ||
+        normCat.includes('health') ||
+        normCat.includes('first aid') ||
+        normCat.includes('pharmacy') ||
+        normName.includes('panadol') ||
+        normName.includes('tablet') ||
+        normName.includes('syrup') ||
+        normName.includes('capsule') ||
+        normName.includes('disprin') ||
+        normName.includes('paracetamol') ||
+        normName.includes('brufen') ||
+        normName.includes('calpol') ||
+        normName.includes('arinac') ||
+        normName.includes('bandage') ||
+        normName.includes('dettol') ||
+        normName.includes('inhaler') ||
+        normName.includes('medicine') ||
+        normName.includes('dawa') ||
+        normUrdu.includes('ادویات') ||
+        normUrdu.includes('دوائی') ||
+        normUrdu.includes('گولی') ||
+        normUrdu.includes('شربت') ||
+        normSindhi.includes('دوائون') ||
+        normSindhi.includes('صحت')
+      );
+
+    case 'fastfood':
+      return (
+        normCat.includes('burger') ||
+        normCat.includes('roll') ||
+        normCat.includes('sandwich') ||
+        normCat.includes('shawarma') ||
+        normCat.includes('fries') ||
+        normCat.includes('pasta') ||
+        normCat.includes('fastfood') ||
+        normName.includes('burger') ||
+        normName.includes('zinger') ||
+        normName.includes('roll') ||
+        normName.includes('shawarma') ||
+        normName.includes('fries') ||
+        normName.includes('sandwich') ||
+        normName.includes('broast') ||
+        normName.includes('nuggets') ||
+        normName.includes('wings') ||
+        normName.includes('pasta') ||
+        normUrdu.includes('برگر') ||
+        normUrdu.includes('زنگر') ||
+        normUrdu.includes('رول') ||
+        normUrdu.includes('شوارما') ||
+        normUrdu.includes('فرائز') ||
+        normUrdu.includes('بروسٹ')
+      );
+
+    case 'bbq':
+      return (
+        normCat.includes('bbq') ||
+        normCat.includes('karahi') ||
+        normCat.includes('desi') ||
+        normName.includes('karahi') ||
+        normName.includes('bbq') ||
+        normName.includes('tikka') ||
+        normName.includes('kabab') ||
+        normName.includes('kebab') ||
+        normName.includes('boti') ||
+        normName.includes('handi') ||
+        normName.includes('malai boti') ||
+        normName.includes('reshmi') ||
+        normName.includes('salan') ||
+        normName.includes('qorma') ||
+        normName.includes('qeema') ||
+        normName.includes('paratha') ||
+        normName.includes('roti') ||
+        normName.includes('naan') ||
+        normName.includes('chapati') ||
+        normUrdu.includes('کڑاہی') ||
+        normUrdu.includes('باربی کیو') ||
+        normUrdu.includes('تکہ') ||
+        normUrdu.includes('کباب') ||
+        normUrdu.includes('بوٹی') ||
+        normUrdu.includes('ہانڈی') ||
+        normUrdu.includes('پراٹھا') ||
+        normSindhi.includes('ڪڙاهي') ||
+        normSindhi.includes('باربي ڪيو') ||
+        normSindhi.includes('ٽڪا')
+      );
+
+    case 'pizza':
+      return (
+        normCat.includes('pizza') ||
+        normName.includes('pizza') ||
+        normUrdu.includes('پیزا') ||
+        normSindhi.includes('پيزا') ||
+        normName.includes('crust') ||
+        normName.includes('calzone')
+      );
+
+    case 'desserts':
+      return (
+        normCat.includes('dessert') ||
+        normCat.includes('sweet') ||
+        normCat.includes('bakery') ||
+        normCat.includes('mithai') ||
+        normName.includes('cake') ||
+        normName.includes('mithai') ||
+        normName.includes('sweet') ||
+        normName.includes('halwa') ||
+        normName.includes('ice cream') ||
+        normName.includes('pastry') ||
+        normName.includes('custard') ||
+        normName.includes('kheer') ||
+        normName.includes('gulab jamun') ||
+        normName.includes('barfi') ||
+        normUrdu.includes('مٹھائی') ||
+        normUrdu.includes('کیک') ||
+        normUrdu.includes('حلوہ') ||
+        normUrdu.includes('آئس کریم')
+      );
+
+    case 'deals':
+      return (
+        item.isCombo === true ||
+        !!item.discountedPrice ||
+        item.isFeatured === true ||
+        normCat.includes('deal') ||
+        normName.includes('deal') ||
+        normUrdu.includes('ڈیل')
+      );
+
+    case 'grocery':
+      return (
+        item.restaurantId === 'groceries' ||
+        item.restaurantId === 'mart' ||
+        item.restaurantId === 'generalstore' ||
+        normCat.includes('grocery') ||
+        normCat.includes('household') ||
+        normCat.includes('staple') ||
+        normCat.includes('spice') ||
+        normCat.includes('dairy') ||
+        normCat.includes('general') ||
+        normName.includes('atta') ||
+        normName.includes('sugar') ||
+        normName.includes('oil') ||
+        normName.includes('ghee') ||
+        normName.includes('daal') ||
+        normName.includes('milk') ||
+        normName.includes('soap') ||
+        normName.includes('surf')
+      );
+
+    default:
+      return normCat.includes(catId.toLowerCase()) || normName.includes(catId.toLowerCase());
+  }
+};
+
+// Helper to check if an item or restaurant matches a search query
+export const matchItemToSearch = (item: MenuItem, query: string, restaurant?: Restaurant): boolean => {
+  if (!query.trim()) return true;
+  const cleanQ = query.toLowerCase().trim();
+  const qTerms = cleanQ.split(/\s+/).filter(Boolean);
+
+  const normCat = (item.category || '').toLowerCase();
+  const normName = (item.name || '').toLowerCase();
+  const normUrdu = (item.nameUrdu || '').toLowerCase();
+  const normSindhi = (item.nameSindhi || '').toLowerCase();
+  const normDesc = (item.description || '').toLowerCase();
+  const restName = (restaurant?.name || '').toLowerCase();
+  const restUrdu = (restaurant?.nameUrdu || '').toLowerCase();
+  const restSindhi = (restaurant?.nameSindhi || '').toLowerCase();
+  const restArea = (restaurant?.area || '').toLowerCase();
+
+  // Keyword-specific quick routing for chai, biryani, medicine, etc.
+  if ((cleanQ.includes('chai') || cleanQ.includes('chaye') || cleanQ.includes('tea') || cleanQ.includes('چائے') || cleanQ.includes('چانهه')) && matchItemToCategory(item, 'drinks')) {
+    return true;
+  }
+  if ((cleanQ.includes('med') || cleanQ.includes('dawa') || cleanQ.includes('panadol') || cleanQ.includes('tablet') || cleanQ.includes('syrup') || cleanQ.includes('ادویات') || cleanQ.includes('فارمیسی')) && matchItemToCategory(item, 'pharmacy')) {
+    return true;
+  }
+  if ((cleanQ.includes('biryani') || cleanQ.includes('baryani') || cleanQ.includes('pulao') || cleanQ.includes('بریانی') || cleanQ.includes('برياني')) && matchItemToCategory(item, 'biryani')) {
+    return true;
+  }
+  if ((cleanQ.includes('burger') || cleanQ.includes('zinger') || cleanQ.includes('برگر')) && (normName.includes('burger') || normName.includes('zinger') || normCat.includes('burger') || normUrdu.includes('برگر'))) {
+    return true;
+  }
+  if ((cleanQ.includes('pizza') || cleanQ.includes('پیزا') || cleanQ.includes('پيزا')) && (normName.includes('pizza') || normCat.includes('pizza') || normUrdu.includes('پیزا'))) {
+    return true;
+  }
+  if ((cleanQ.includes('karahi') || cleanQ.includes('kadahi') || cleanQ.includes('کڑاہی') || cleanQ.includes('ڪڙاهي') || cleanQ.includes('bbq') || cleanQ.includes('tikka')) && matchItemToCategory(item, 'bbq')) {
+    return true;
+  }
+
+  const fullSearchString = `${normName} ${normUrdu} ${normSindhi} ${normCat} ${normDesc} ${restName} ${restUrdu} ${restSindhi} ${restArea}`;
+  return qTerms.every(term => fullSearchString.includes(term));
+};
 
 export const CustomerHome: React.FC<CustomerHomeProps> = ({
   onSelectRestaurant,
@@ -33,7 +294,9 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     setSelectedCategory, 
     searchQuery, 
     setSearchQuery,
+    cart,
     addToCart,
+    updateCartQuantity,
     applyPromoCode,
     openLoginModal,
     triggerToast,
@@ -50,6 +313,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'top_rated' | 'low_fee' | 'deals'>('all');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [selectedVariations, setSelectedVariations] = useState<Record<string, { name: string; price: number }>>({});
+  const [visibleProductCount, setVisibleProductCount] = useState<number>(24);
 
   // Active customer order for live tracking
   const activeOrder = orders.find(
@@ -57,37 +322,59 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
          o.status !== 'delivered' && o.status !== 'cancelled'
   );
 
-  // Filter restaurants
+  // Filter matching products across ALL restaurants in Matli
+  const matchingProducts = menuItems.filter(item => {
+    const rest = restaurants.find(r => r.id === item.restaurantId);
+    if (!rest) return false;
+
+    // Filter by category if selected
+    if (selectedCategory) {
+      if (!matchItemToCategory(item, selectedCategory)) {
+        return false;
+      }
+    }
+
+    // Filter by search query if present
+    if (searchQuery.trim()) {
+      if (!matchItemToSearch(item, searchQuery, rest)) {
+        return false;
+      }
+    }
+
+    // Sub-filter checks
+    if (activeFilter === 'deals' && !item.isCombo && !item.discountedPrice && !matchItemToCategory(item, 'deals')) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Filter restaurants: include any restaurant that matches search/category directly OR has matching items
   const filteredRestaurants = restaurants.filter(restaurant => {
+    const restItems = menuItems.filter(i => i.restaurantId === restaurant.id);
+
     // Search match
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.toLowerCase().trim();
       const matchName = restaurant.name.toLowerCase().includes(q) || 
         (restaurant.nameUrdu && restaurant.nameUrdu.includes(q)) ||
         (restaurant.nameSindhi && restaurant.nameSindhi.includes(q));
       const matchArea = restaurant.area.toLowerCase().includes(q);
       const matchCategory = restaurant.categories.some(c => c.toLowerCase().includes(q));
       
-      // Also match if restaurant sells item matching query
-      const matchingItems = menuItems.filter(
-        item => item.restaurantId === restaurant.id && (
-          item.name.toLowerCase().includes(q) ||
-          (item.nameUrdu && item.nameUrdu.includes(q)) ||
-          (item.nameSindhi && item.nameSindhi.includes(q)) ||
-          item.category.toLowerCase().includes(q)
-        )
-      );
+      const hasMatchingItem = restItems.some(item => matchItemToSearch(item, searchQuery, restaurant));
       
-      if (!matchName && !matchArea && !matchCategory && matchingItems.length === 0) {
+      if (!matchName && !matchArea && !matchCategory && !hasMatchingItem) {
         return false;
       }
     }
 
     // Category filter
     if (selectedCategory) {
-      if (selectedCategory === 'deals') {
-        if (!restaurant.categories.includes('deals')) return false;
-      } else if (!restaurant.categories.includes(selectedCategory)) {
+      const hasCategoryInRestaurant = restaurant.categories.includes(selectedCategory);
+      const hasMatchingItemInCategory = restItems.some(item => matchItemToCategory(item, selectedCategory));
+      
+      if (!hasCategoryInRestaurant && !hasMatchingItemInCategory) {
         return false;
       }
     }
@@ -95,7 +382,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     // Quick sub-filter
     if (activeFilter === 'top_rated' && restaurant.rating < 4.7) return false;
     if (activeFilter === 'low_fee' && restaurant.deliveryFee > 50) return false;
-    if (activeFilter === 'deals' && !restaurant.categories.includes('deals')) return false;
+    if (activeFilter === 'deals' && !restaurant.categories.includes('deals') && !restItems.some(i => i.isCombo || i.discountedPrice)) return false;
 
     return true;
   });
@@ -109,6 +396,23 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     applyPromoCode(code);
     setTimeout(() => setCopiedCode(null), 3000);
   };
+
+  const handleAddToCartItem = (item: MenuItem, restaurant?: Restaurant) => {
+    const targetRest = restaurant || restaurants.find(r => r.id === item.restaurantId);
+    if (!targetRest) return;
+    
+    const activeVar = selectedVariations[item.id] || (item.variationTypes && item.variationTypes[0]?.options[0]);
+    addToCart(targetRest, item, 1, activeVar);
+    triggerToast(
+      'Added to Order',
+      `${getItemName(item)} from ${getRestaurantName(targetRest)} added to cart!`,
+      'success'
+    );
+  };
+
+  // Resolve current active category title
+  const activeCategoryObj = categories.find(c => c.id === selectedCategory);
+  const activeCategoryTitle = activeCategoryObj ? getCategoryName(activeCategoryObj) : null;
 
   return (
     <div className="min-h-screen bg-[#FFF5F8] pb-24 text-[#1F2937]">
