@@ -54,6 +54,7 @@ export interface ToastNotification {
 
 export interface CartState {
   restaurantId: string | null;
+  restaurantIds?: string[];
   items: OrderItem[];
   specialInstructions: string;
   promoCode: string;
@@ -997,10 +998,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications(prev => prev.filter(t => t.id !== id));
   };
 
-  // Cart Calculations
+  // Cart Calculations (Supports single & multi-restaurant orders)
   const cartSubtotal = cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const currentCartRestaurant = restaurants.find(r => r.id === cart.restaurantId);
-  const cartDeliveryFee = cart.items.length > 0 ? (currentCartRestaurant?.deliveryFee ?? platformSettings.baseDeliveryFee) : 0;
+  const cartRestaurantIds = Array.from(new Set(cart.items.map(i => i.restaurantId).filter(Boolean))) as string[];
+  const cartRestaurants = restaurants.filter(r => cartRestaurantIds.includes(r.id));
+  const currentCartRestaurant = cartRestaurants[0] || restaurants.find(r => r.id === cart.restaurantId);
+  const cartDeliveryFee = cart.items.length > 0 
+    ? (cartRestaurants.length > 0 
+        ? Math.max(...cartRestaurants.map(r => r.deliveryFee), platformSettings.baseDeliveryFee)
+        : platformSettings.baseDeliveryFee)
+    : 0;
   const cartTotal = Math.max(0, cartSubtotal + cartDeliveryFee - cart.discount);
   const cartItemCount = cart.items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -1015,25 +1022,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalName = variation ? `${item.name} (${variation.name})` : item.name;
 
     setCart(prev => {
-      if (prev.restaurantId && prev.restaurantId !== restaurant.id && prev.items.length > 0) {
-        triggerToast('Cart Replaced', `Switched cart items to ${restaurant.name}`, 'warning');
-        return {
-          restaurantId: restaurant.id,
-          items: [{
-            id: 'ci-' + Date.now(),
-            menuItemId: item.id,
-            name: finalName,
-            price: finalPrice,
-            quantity: quantity,
-            selectedVariation: variation?.name,
-            image: item.image
-          }],
-          specialInstructions: '',
-          promoCode: '',
-          discount: 0
-        };
-      }
-
       const existingIndex = prev.items.findIndex(
         i => i.menuItemId === item.id && (variation ? i.selectedVariation === variation.name : !i.selectedVariation)
       );
@@ -1052,16 +1040,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             price: finalPrice,
             quantity: quantity,
             selectedVariation: variation?.name,
-            image: item.image
+            image: item.image,
+            restaurantId: restaurant.id,
+            restaurantName: restaurant.name
           }
         ];
       }
 
-      triggerToast('Added to Cart', `${finalName} added (₨ ${finalPrice})`, 'success');
+      const allRestIds = Array.from(new Set(updatedItems.map(i => i.restaurantId).filter(Boolean))) as string[];
+
+      if (allRestIds.length > 1) {
+        triggerToast('Multi-Restaurant Item Added', `${finalName} from ${restaurant.name} added! You can order from multiple restaurants in one single order.`, 'success');
+      } else {
+        triggerToast('Added to Cart', `${finalName} added (₨ ${finalPrice})`, 'success');
+      }
 
       return {
         ...prev,
-        restaurantId: restaurant.id,
+        restaurantId: prev.restaurantId || restaurant.id,
+        restaurantIds: allRestIds,
         items: updatedItems
       };
     });
@@ -1076,9 +1073,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newQty = existing.quantity + delta;
       if (newQty <= 0) {
         const remaining = prev.items.filter(i => i.menuItemId !== menuItemId);
+        const allRestIds = Array.from(new Set(remaining.map(i => i.restaurantId).filter(Boolean))) as string[];
         return {
           ...prev,
-          restaurantId: remaining.length === 0 ? null : prev.restaurantId,
+          restaurantId: allRestIds[0] || null,
+          restaurantIds: allRestIds,
           items: remaining,
           discount: remaining.length === 0 ? 0 : prev.discount
         };
@@ -1095,9 +1094,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sounds.playClick();
     setCart(prev => {
       const remaining = prev.items.filter(i => i.menuItemId !== menuItemId);
+      const allRestIds = Array.from(new Set(remaining.map(i => i.restaurantId).filter(Boolean))) as string[];
       return {
         ...prev,
-        restaurantId: remaining.length === 0 ? null : prev.restaurantId,
+        restaurantId: allRestIds[0] || null,
+        restaurantIds: allRestIds,
         items: remaining,
         discount: remaining.length === 0 ? 0 : prev.discount
       };
@@ -1107,6 +1108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearCart = () => {
     setCart({
       restaurantId: null,
+      restaurantIds: [],
       items: [],
       specialInstructions: '',
       promoCode: '',
@@ -1198,9 +1200,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Real Order Creation in Firestore
+  // Real Order Creation in Firestore (Supports Single & Multi-Restaurant orders)
   const placeOrder = async (deliveryAddress: Address, paymentMethod: 'cod' | 'jazzcash' | 'easypaisa'): Promise<Order> => {
-    const restaurant = restaurants.find(r => r.id === cart.restaurantId) || restaurants[0];
+    // Gather all restaurants involved in the cart
+    const uniqueRestIds = Array.from(new Set(cart.items.map(i => i.restaurantId).filter(Boolean))) as string[];
+    const involvedRestaurants = restaurants.filter(r => uniqueRestIds.includes(r.id));
+    const primaryRest = involvedRestaurants[0] || (cart.restaurantId ? restaurants.find(r => r.id === cart.restaurantId) : null) || restaurants[0];
+    
+    const allRestNames = involvedRestaurants.length > 0 
+      ? involvedRestaurants.map(r => r.name) 
+      : [primaryRest.name];
+    
+    const combinedRestName = allRestNames.length > 1 
+      ? allRestNames.join(' + ') 
+      : primaryRest.name;
+
+    const combinedRestAddress = involvedRestaurants.length > 1
+      ? involvedRestaurants.map(r => `${r.name}: ${r.address || r.area}`).join(' | ')
+      : (primaryRest.address || primaryRest.area || 'Matli');
+
+    const combinedRestPhone = involvedRestaurants.length > 1
+      ? involvedRestaurants.map(r => r.phone).join(', ')
+      : primaryRest.phone;
+
+    const maxDeliveryTime = involvedRestaurants.length > 0
+      ? involvedRestaurants[0].deliveryTime
+      : primaryRest.deliveryTime;
+
     const orderNum = 'DST-' + Math.floor(1000 + Math.random() * 9000);
     const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
 
@@ -1209,10 +1235,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       customerId: safeUser.id || 'guest-customer',
       customerName: safeUser.name || 'Matli Customer',
       customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
-      restaurantPhone: restaurant.phone,
-      restaurantAddress: restaurant.address,
+      restaurantId: primaryRest.id,
+      restaurantName: combinedRestName,
+      restaurantPhone: combinedRestPhone,
+      restaurantAddress: combinedRestAddress,
+      restaurantIds: uniqueRestIds.length > 0 ? uniqueRestIds : [primaryRest.id],
+      restaurantNames: allRestNames,
       items: [...cart.items],
       subtotal: cartSubtotal,
       deliveryFee: cartDeliveryFee,
@@ -1225,7 +1253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       specialInstructions: cart.specialInstructions,
-      estimatedDeliveryTime: restaurant.deliveryTime
+      estimatedDeliveryTime: maxDeliveryTime
     };
 
     let createdOrder: Order;
@@ -1242,7 +1270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setOrders(prev => [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)]);
 
     // 2. Write to Firestore "notifications" collection for real-time Admin/Rider alerts!
-    const itemsFormatted = cart.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+    const itemsFormatted = cart.items.map(i => `${i.quantity}x ${i.name}${i.restaurantName ? ` (${i.restaurantName})` : ''}`).join(', ');
     const notifTime = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
     try {
       await createFirestoreNotification({
@@ -1250,7 +1278,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         orderNumber: orderNum,
         customerName: safeUser.name || deliveryAddress.phone || 'Matli Customer',
         customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
-        restaurantName: restaurant.name,
+        restaurantName: combinedRestName,
         items: itemsFormatted,
         total: cartTotal,
         time: notifTime,
@@ -1276,7 +1304,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } catch {}
 
-    triggerToast('Order Placed in Firestore!', `Order #${orderNum} recorded live for ${restaurant.name}`, 'success');
+    triggerToast('Order Placed in Firestore!', `Order #${orderNum} recorded live for ${combinedRestName}`, 'success');
     return createdOrder;
   };
 

@@ -17,7 +17,8 @@ export function generateWhatsAppOrderMessage(order: Order, type: 'vendor' | 'cus
   let itemsList = '';
   order.items.forEach((item, index) => {
     const itemTotal = item.price * item.quantity;
-    itemsList += `${index + 1}. *${item.name}* x ${item.quantity} = ₨ ${itemTotal}\n`;
+    const restTag = item.restaurantName ? ` [${item.restaurantName}]` : '';
+    itemsList += `${index + 1}. *${item.name}*${restTag} x ${item.quantity} = ₨ ${itemTotal}\n`;
   });
 
   const message = `

@@ -268,6 +268,11 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
                         <span className="font-black text-sm sm:text-base text-gray-900">
                           {order.restaurantName}
                         </span>
+                        {order.restaurantNames && order.restaurantNames.length > 1 && (
+                          <span className="bg-pink-100 text-[#E11D74] text-[10px] font-bold px-2 py-0.5 rounded-full">
+                            {order.restaurantNames.length} Restaurants
+                          </span>
+                        )}
                         {getStatusBadge(order.status)}
                       </div>
                       <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
@@ -296,6 +301,11 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
                             {item.quantity}x
                           </span>
                           <span className="font-medium truncate">{item.name}</span>
+                          {item.restaurantName && (
+                            <span className="text-[9px] text-[#E11D74] bg-pink-100 px-1.5 py-0.5 rounded border border-pink-200 font-semibold shrink-0">
+                              {item.restaurantName}
+                            </span>
+                          )}
                         </div>
                         <span className="font-bold text-gray-900 shrink-0 ml-2">
                           ₨ {item.price * item.quantity}

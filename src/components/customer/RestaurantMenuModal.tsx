@@ -68,7 +68,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
     return true;
   });
 
-  const isCartFromThisRestaurant = cart.restaurantId === restaurant.id && cart.items.length > 0;
+  const hasCartItems = cart.items.length > 0;
 
   return (
     <div className="min-h-screen bg-[#FFF5F8] pb-28 text-[#1F2937]">
@@ -95,7 +95,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
             <span className="hidden sm:inline">WhatsApp Hotel</span>
           </button>
 
-          {isCartFromThisRestaurant && (
+          {hasCartItems && (
             <button
               onClick={onOpenCart}
               className="flex items-center gap-1.5 text-xs font-bold bg-gradient-to-r from-[#E11D74] to-[#D81B60] hover:from-[#C2185B] hover:to-[#AD1457] text-white px-3.5 py-1.5 rounded-xl shadow-xs transition-colors"
@@ -388,7 +388,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
 
       {/* Floating Bottom Cart Bar */}
       <AnimatePresence>
-        {isCartFromThisRestaurant && (
+        {hasCartItems && (
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

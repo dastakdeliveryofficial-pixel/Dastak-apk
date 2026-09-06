@@ -62,9 +62,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const currentRestaurant = restaurants.find(r => r.id === cart.restaurantId);
+  const cartRestaurantIds = Array.from(new Set(cart.items.map(i => i.restaurantId).filter(Boolean))) as string[];
+  const cartRestaurants = restaurants.filter(r => cartRestaurantIds.includes(r.id));
+  const currentRestaurant = cartRestaurants[0] || restaurants.find(r => r.id === cart.restaurantId);
+  const isMultiRestaurant = cartRestaurants.length > 1;
+  const multiRestNames = cartRestaurants.map(r => getRestaurantName(r)).join(' + ');
   const selectedAddress = addresses.find(a => a.id === selectedAddressId) || addresses[0];
-  const restName = currentRestaurant ? getRestaurantName(currentRestaurant) : '';
+  const restName = isMultiRestaurant ? multiRestNames : (currentRestaurant ? getRestaurantName(currentRestaurant) : '');
 
   const getEffectiveAddress = () => {
     if (isGuestMode || addresses.length === 0) {
@@ -102,7 +106,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     const addr = getEffectiveAddress();
     if (!addr) return;
 
-    if (currentRestaurant && cartSubtotal < currentRestaurant.minOrder) {
+    if (!isMultiRestaurant && currentRestaurant && cartSubtotal < currentRestaurant.minOrder) {
       triggerToast('Minimum Order', `Minimum order for ${restName} is ₨ ${currentRestaurant.minOrder}`, 'warning');
       return;
     }
@@ -130,7 +134,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       const message = generateWhatsAppOrderMessage(order, 'vendor');
       
       // Target restaurant phone or platform support phone
-      const targetPhone = currentRestaurant?.whatsappNumber || platformSettings.supportWhatsApp;
+      const targetPhone = isMultiRestaurant
+        ? platformSettings.supportWhatsApp
+        : (currentRestaurant?.whatsappNumber || platformSettings.supportWhatsApp);
       openWhatsAppChat(targetPhone, message);
 
       onClose();
@@ -167,8 +173,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
               <div>
                 <h3 className="font-bold text-base text-gray-900">{t.yourCart}</h3>
-                {currentRestaurant && (
-                  <p className="text-xs text-[#E11D74] font-semibold">{restName}</p>
+                {isMultiRestaurant ? (
+                  <p className="text-xs text-[#E11D74] font-semibold flex items-center gap-1.5">
+                    <span>Multi-Restaurant</span>
+                    <span className="bg-pink-100 text-[#E11D74] text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                      {cartRestaurants.length} Venues
+                    </span>
+                  </p>
+                ) : (
+                  currentRestaurant && (
+                    <p className="text-xs text-[#E11D74] font-semibold">{restName}</p>
+                  )
                 )}
               </div>
             </div>
@@ -233,6 +248,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   </span>
                 </div>
 
+                {/* Multi-Restaurant Notice */}
+                {isMultiRestaurant && (
+                  <div className="bg-gradient-to-r from-pink-50 to-rose-50 border border-pink-200 rounded-2xl p-3 flex items-start gap-2.5 shadow-2xs">
+                    <div className="w-7 h-7 rounded-lg bg-[#E11D74] text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                      🏪
+                    </div>
+                    <div className="text-xs">
+                      <p className="font-bold text-gray-900">Multi-Restaurant Combined Order</p>
+                      <p className="text-[11px] text-gray-600 mt-0.5">
+                        Items from <strong>{cartRestaurants.map(r => getRestaurantName(r)).join(' & ')}</strong> will be delivered together in a single delivery.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Items List */}
                 <div className="space-y-2.5">
                   <h4 className="text-xs font-bold text-pink-900/60 uppercase tracking-wider">
@@ -256,9 +286,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           <h5 className="font-bold text-xs sm:text-sm text-gray-900 truncate">
                             {item.name}
                           </h5>
-                          <span className="text-xs text-gray-500">
-                            ₨ {item.price} x {item.quantity} = <strong className="text-gray-900">₨ {item.price * item.quantity}</strong>
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            {item.restaurantName && (
+                              <span className="text-[10px] font-semibold text-[#E11D74] bg-pink-100 px-1.5 py-0.5 rounded border border-pink-200 truncate max-w-[130px]">
+                                🏪 {item.restaurantName}
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-500">
+                              ₨ {item.price} x {item.quantity} = <strong className="text-gray-900">₨ {item.price * item.quantity}</strong>
+                            </span>
+                          </div>
                         </div>
                       </div>
 

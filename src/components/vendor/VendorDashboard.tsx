@@ -59,7 +59,11 @@ export const VendorDashboard: React.FC = () => {
   ];
 
   const currentRestaurant = restaurants.find(r => r.id === activeVendorRestaurantId) || restaurants[0];
-  const restaurantOrders = currentRestaurant ? orders.filter(o => o.restaurantId === currentRestaurant.id) : [];
+  const restaurantOrders = currentRestaurant ? orders.filter(o => 
+    o.restaurantId === currentRestaurant.id || 
+    (o.restaurantIds && o.restaurantIds.includes(currentRestaurant.id)) ||
+    o.items.some(i => i.restaurantId === currentRestaurant.id)
+  ) : [];
   const restaurantMenu = currentRestaurant ? menuItems.filter(i => i.restaurantId === currentRestaurant.id) : [];
 
   // Filter orders by tab
@@ -459,14 +463,35 @@ export const VendorDashboard: React.FC = () => {
 
                       {/* Items Breakdown */}
                       <div className="space-y-1 text-xs">
-                        {order.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between py-0.5 border-b border-gray-50 text-[11px]">
-                            <span className="font-medium text-gray-700">
-                              <strong className="text-[#FF6B00]">{item.quantity}x</strong> {item.name}
-                            </span>
-                            <span className="font-bold text-gray-900">₨ {item.price * item.quantity}</span>
+                        {order.restaurantNames && order.restaurantNames.length > 1 && (
+                          <div className="text-[10px] text-pink-700 bg-pink-50 p-1.5 rounded-lg border border-pink-100 font-semibold mb-1">
+                            Combined Order with {order.restaurantNames.filter(n => n !== currentRestaurant.name).join(', ')}
                           </div>
-                        ))}
+                        )}
+                        {order.items.map((item, idx) => {
+                          const isMine = !item.restaurantId || item.restaurantId === currentRestaurant.id;
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`flex justify-between py-1 px-1.5 rounded-lg border-b border-gray-50 text-[11px] ${
+                                isMine ? 'bg-orange-50/50' : 'bg-gray-50/40 opacity-75'
+                              }`}
+                            >
+                              <span className="font-medium text-gray-700 flex items-center gap-1.5">
+                                <strong className={isMine ? 'text-[#FF6B00]' : 'text-gray-400'}>{item.quantity}x</strong> 
+                                <span>{item.name}</span>
+                                {item.restaurantName && (
+                                  <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                                    isMine ? 'bg-orange-100 text-[#FF6B00]' : 'bg-gray-200 text-gray-600'
+                                  }`}>
+                                    {isMine ? 'Prepare Here' : item.restaurantName}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="font-bold text-gray-900">₨ {item.price * item.quantity}</span>
+                            </div>
+                          );
+                        })}
                       </div>
 
                       {/* Assigned Rider Indicator & Assign Selector */}

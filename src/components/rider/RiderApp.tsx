@@ -422,7 +422,16 @@ export const RiderApp: React.FC = () => {
                     <div>
                       <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
                         <Store className="w-4 h-4 text-[#FF6B00]" />
-                        {riderActiveOrder.restaurantName}
+                        {riderActiveOrder.restaurantNames && riderActiveOrder.restaurantNames.length > 1 ? (
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span>{riderActiveOrder.restaurantName}</span>
+                            <span className="bg-orange-100 text-[#FF6B00] text-[10px] font-bold px-1.5 py-0.2 rounded">
+                              {riderActiveOrder.restaurantNames.length} Pickups
+                            </span>
+                          </span>
+                        ) : (
+                          riderActiveOrder.restaurantName
+                        )}
                       </h4>
                       <p className="text-xs text-gray-500 mt-1">{riderActiveOrder.restaurantAddress}</p>
                       <p className="text-[11px] text-gray-400 mt-0.5">Phone: {riderActiveOrder.restaurantPhone}</p>
@@ -433,7 +442,7 @@ export const RiderApp: React.FC = () => {
                         onClick={() => handleMarkPickedUp(riderActiveOrder.id)}
                         className="w-full bg-[#FF6B00] hover:bg-[#e05e00] text-white font-bold text-xs py-2 rounded-xl transition-colors shadow-xs"
                       >
-                        ✓ Confirm Picked Up from Restaurant
+                        ✓ Confirm Picked Up from {riderActiveOrder.restaurantNames && riderActiveOrder.restaurantNames.length > 1 ? 'All Restaurants' : 'Restaurant'}
                       </button>
                     )}
                   </div>
@@ -558,7 +567,14 @@ export const RiderApp: React.FC = () => {
                         <h4 className="font-bold text-sm text-gray-900 mt-1">
                           Order #{order.orderNumber}
                         </h4>
-                        <span className="text-xs text-gray-400">{order.restaurantName}</span>
+                        <span className="text-xs text-gray-500 flex items-center gap-1">
+                          <span>{order.restaurantName}</span>
+                          {order.restaurantNames && order.restaurantNames.length > 1 && (
+                            <span className="bg-orange-100 text-[#FF6B00] text-[9px] font-bold px-1 rounded">
+                              {order.restaurantNames.length} Pickups
+                            </span>
+                          )}
+                        </span>
                       </div>
 
                       <div className="text-right">

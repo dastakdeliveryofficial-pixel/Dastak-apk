@@ -93,6 +93,8 @@ export interface OrderItem {
   selectedVariation?: string;
   notes?: string;
   image?: string;
+  restaurantId?: string;
+  restaurantName?: string;
 }
 
 export type OrderStatus = 
@@ -113,6 +115,8 @@ export interface Order {
   restaurantName: string;
   restaurantPhone: string;
   restaurantAddress: string;
+  restaurantIds?: string[];
+  restaurantNames?: string[];
   riderId?: string;
   riderName?: string;
   riderPhone?: string;

@@ -452,13 +452,18 @@ export const AdminDashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="p-3.5 font-semibold text-gray-800">
-                          {order.restaurantName}
+                          <span>{order.restaurantName}</span>
+                          {order.restaurantNames && order.restaurantNames.length > 1 && (
+                            <span className="block text-[9px] text-[#E11D74] font-bold">
+                              Multi-Restaurant ({order.restaurantNames.length} Venues)
+                            </span>
+                          )}
                         </td>
                         <td className="p-3.5">
                           <span className="font-bold text-gray-900 block">{order.customerName}</span>
                           <span className="text-[11px] text-gray-500">{order.deliveryAddress.streetAddress}, {order.deliveryAddress.area}</span>
                           <span className="text-[10px] text-pink-700 font-semibold block mt-0.5">
-                            {order.items.map(i => `${i.quantity}x ${i.name}`).join(', ')}
+                            {order.items.map(i => `${i.quantity}x ${i.name}${i.restaurantName ? ` [${i.restaurantName}]` : ''}`).join(', ')}
                           </span>
                         </td>
                         <td className="p-3.5">
