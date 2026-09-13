@@ -505,3 +505,48 @@ export async function markAllNotificationsReadInFirestore(notificationIds: strin
     handleFirestoreError(err, OperationType.UPDATE, NOTIFICATIONS_COLLECTION);
   }
 }
+
+// 6. Promotional Banners & Vouchers Collection
+export function subscribeToPromos(onUpdate: (promos: BannerPromo[]) => void) {
+  return onSnapshot(
+    collection(db, PROMOS_COLLECTION),
+    (snapshot) => {
+      const promosList: BannerPromo[] = [];
+      snapshot.forEach((docSnap) => {
+        promosList.push({ ...(docSnap.data() as BannerPromo), id: docSnap.id });
+      });
+      if (promosList.length > 0) {
+        onUpdate(promosList);
+      }
+    },
+    (err) => {
+      handleFirestoreError(err, OperationType.LIST, PROMOS_COLLECTION);
+    }
+  );
+}
+
+export async function updatePromoStatusInFirestore(promoId: string, active: boolean): Promise<void> {
+  try {
+    const promoRef = doc(db, PROMOS_COLLECTION, promoId);
+    await updateDoc(promoRef, { active });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${PROMOS_COLLECTION}/${promoId}`);
+  }
+}
+
+export async function deletePromoFromFirestore(promoId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, PROMOS_COLLECTION, promoId));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${PROMOS_COLLECTION}/${promoId}`);
+  }
+}
+
+export async function savePromoToFirestore(promo: BannerPromo): Promise<void> {
+  try {
+    await setDoc(doc(db, PROMOS_COLLECTION, promo.id), promo);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `${PROMOS_COLLECTION}/${promo.id}`);
+  }
+}
+

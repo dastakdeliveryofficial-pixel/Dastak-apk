@@ -80,13 +80,15 @@ const MainAppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FFF5F8] text-[#1F2937] flex flex-col font-sans selection:bg-[#E11D74] selection:text-white w-full max-w-full overflow-x-hidden">
-      {/* Universal Header with Role Switcher & Cart */}
-      <Header
-        onOpenCart={() => setIsCartOpen(true)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
-        onOpenAddresses={() => setIsAddressOpen(true)}
-        onOpenApkModal={() => setIsApkModalOpen(true)}
-      />
+      {/* Universal Header with Role Switcher & Cart (Hidden on Customer Home to show authentic branded header) */}
+      {!(currentRole === 'customer' && !selectedRestaurant && !activeTrackingOrderId) && (
+        <Header
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenHistory={() => setIsHistoryOpen(true)}
+          onOpenAddresses={() => setIsAddressOpen(true)}
+          onOpenApkModal={() => setIsApkModalOpen(true)}
+        />
+      )}
 
       {/* Main View Router based on Selected Role */}
       <main className="flex-1 w-full max-w-full overflow-x-hidden">
@@ -110,6 +112,8 @@ const MainAppContent: React.FC = () => {
               onOpenCart={() => setIsCartOpen(true)}
               onTrackOrder={handleTrackOrderFromHistory}
               onOpenHistory={() => setIsHistoryOpen(true)}
+              onOpenAddresses={() => setIsAddressOpen(true)}
+              onOpenApkModal={() => setIsApkModalOpen(true)}
             />
           )
         )}
@@ -121,54 +125,56 @@ const MainAppContent: React.FC = () => {
         {currentRole === 'admin' && <AdminDashboard />}
       </main>
 
-      {/* Clean Minimalist App Footer */}
-      <footer className="bg-white border-t border-pink-100 px-4 sm:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 w-full max-w-full">
-        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
-          <span>&copy; {new Date().getFullYear()} Dastak Delivery • Matli, Sindh</span>
-          <button
-            onClick={() => setIsApkModalOpen(true)}
-            className="text-[#E11D74] hover:text-[#C2185B] font-bold flex items-center gap-1 bg-pink-50 hover:bg-pink-100 px-2.5 py-1 rounded-lg border border-pink-200"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>📲 Download APK (Android App)</span>
-          </button>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
-          {/* Quick Language Switcher in Footer */}
-          <div className="flex items-center bg-pink-50 border border-pink-200 rounded-lg p-0.5">
+      {/* Clean Minimalist App Footer (Hidden on Customer Home to respect native bottom navigation) */}
+      {!(currentRole === 'customer' && !selectedRestaurant && !activeTrackingOrderId) && (
+        <footer className="bg-white border-t border-pink-100 px-4 sm:px-8 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 w-full max-w-full">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
+            <span>&copy; {new Date().getFullYear()} Dastak Delivery • Matli, Sindh</span>
             <button
-              onClick={() => setLanguage('en')}
-              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                language === 'en' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              onClick={() => setIsApkModalOpen(true)}
+              className="text-[#E11D74] hover:text-[#C2185B] font-bold flex items-center gap-1 bg-pink-50 hover:bg-pink-100 px-2.5 py-1 rounded-lg border border-pink-200"
             >
-              English
-            </button>
-            <button
-              onClick={() => setLanguage('ur')}
-              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                language === 'ur' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              اردو
-            </button>
-            <button
-              onClick={() => setLanguage('sd')}
-              className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                language === 'sd' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              سنڌي
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>📲 Download APK (Android App)</span>
             </button>
           </div>
 
-          <span className="text-[#E11D74] font-bold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Matli Live Support Active
-          </span>
-        </div>
-      </footer>
+          <div className="flex flex-wrap items-center justify-center gap-3 text-xs">
+            {/* Quick Language Switcher in Footer */}
+            <div className="flex items-center bg-pink-50 border border-pink-200 rounded-lg p-0.5">
+              <button
+                onClick={() => setLanguage('en')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  language === 'en' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                English
+              </button>
+              <button
+                onClick={() => setLanguage('ur')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  language === 'ur' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                اردو
+              </button>
+              <button
+                onClick={() => setLanguage('sd')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
+                  language === 'sd' ? 'bg-[#E11D74] text-white shadow-2xs' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                سنڌي
+              </button>
+            </div>
+
+            <span className="text-[#E11D74] font-bold flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Matli Live Support Active
+            </span>
+          </div>
+        </footer>
+      )}
 
       {/* Customer Drawers and Modals */}
       <CartDrawer

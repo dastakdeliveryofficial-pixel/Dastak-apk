@@ -3,7 +3,7 @@ import confetti from 'canvas-confetti';
 import { 
   User, UserRole, Restaurant, MenuItem, Order, Rider, 
   Category, BannerPromo, PlatformSettings, Address, OrderItem, OrderStatus, Language, AloChatMessage, AppNotification,
-  FirestoreNotification
+  FirestoreNotification, PromoCode
 } from '../types';
 import { 
   INITIAL_RESTAURANTS, INITIAL_MENU_ITEMS, INITIAL_ORDERS, 
@@ -41,7 +41,11 @@ import {
   createFirestoreNotification,
   subscribeToNotifications,
   markNotificationReadInFirestore,
-  markAllNotificationsReadInFirestore
+  markAllNotificationsReadInFirestore,
+  subscribeToPromos,
+  updatePromoStatusInFirestore,
+  deletePromoFromFirestore,
+  savePromoToFirestore
 } from '../lib/firestoreService';
 
 export interface ToastNotification {
@@ -215,6 +219,11 @@ interface AppContextType {
   deleteCategory: (id: string) => void;
   addBannerPromo: (promo: Omit<BannerPromo, 'id'>) => void;
   deleteBannerPromo: (id: string) => void;
+  toggleBannerPromoActive: (id: string) => void;
+  promoCodes: PromoCode[];
+  togglePromoCodeActive: (code: string) => void;
+  addPromoCode: (promo: PromoCode) => void;
+  deletePromoCode: (code: string) => void;
 
   // Alo Chat Support
   aloChatMessages: AloChatMessage[];
@@ -380,8 +389,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [riders, setRiders] = useState<Rider[]>(INITIAL_RIDERS);
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
-  const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(BANNER_PROMOS);
+  const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_banner_promos');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return BANNER_PROMOS;
+  });
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_promo_codes');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [
+      { code: 'MATLI20', discountType: 'percentage', discountValue: 20, minOrderValue: 300, maxDiscount: 150, expiryDate: '2026-12-31', isActive: true },
+      { code: 'FREESHIP', discountType: 'fixed', discountValue: 60, minOrderValue: 400, expiryDate: '2026-12-31', isActive: true },
+      { code: 'WELCOME100', discountType: 'fixed', discountValue: 100, minOrderValue: 500, expiryDate: '2026-12-31', isActive: true }
+    ];
+  });
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings>(INITIAL_SETTINGS);
+
+  // Sync promos to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_banner_promos', JSON.stringify(bannerPromos));
+    } catch {}
+  }, [bannerPromos]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_promo_codes', JSON.stringify(promoCodes));
+    } catch {}
+  }, [promoCodes]);
 
   // Session Synchronization helper
   const syncAuthSession = (
@@ -905,6 +944,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    // Subscribe to real-time Promotional Banners
+    const unsubPromos = subscribeToPromos((livePromos) => {
+      if (livePromos && livePromos.length > 0) {
+        setBannerPromos(livePromos);
+      }
+    });
+
     // Listen to Firebase Auth state
     const unsubAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -961,6 +1007,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubRiders();
       unsubUsers();
       unsubNotifs();
+      unsubPromos();
       unsubAuth();
     };
   }, [isSoundEnabled]);
@@ -1118,21 +1165,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const applyPromoCode = (code: string): { success: boolean; message: string } => {
     const trimmed = code.trim().toUpperCase();
-    const promo = bannerPromos.find(p => p.code.toUpperCase() === trimmed && p.active);
     
-    if (!promo) {
-      return { success: false, message: 'Invalid promo code. Try MATLI20 or FREESHIP' };
+    // Look in bannerPromos and promoCodes
+    const banner = bannerPromos.find(p => p.code.toUpperCase() === trimmed);
+    const voucher = promoCodes.find(p => p.code.toUpperCase() === trimmed);
+
+    if (!banner && !voucher) {
+      return { success: false, message: 'Invalid promo code. Please check code or try MATLI20 / FREESHIP' };
     }
 
-    const calculatedDiscount = Math.round((cartSubtotal * promo.discountPercent) / 100);
+    // Check if deactivated
+    const isBannerActive = banner ? banner.active !== false : true;
+    const isVoucherActive = voucher ? voucher.isActive !== false : true;
+
+    if (!isBannerActive || !isVoucherActive) {
+      return { success: false, message: `Promo code ${trimmed} has been deactivated by administration.` };
+    }
+
+    // Check minimum order value if defined
+    const minOrder = voucher?.minOrderValue || 200;
+    if (cartSubtotal < minOrder) {
+      return { success: false, message: `Minimum order for code ${trimmed} is ₨ ${minOrder}` };
+    }
+
+    let calculatedDiscount = 0;
+    if (voucher) {
+      if (voucher.discountType === 'percentage') {
+        calculatedDiscount = Math.round((cartSubtotal * voucher.discountValue) / 100);
+        if (voucher.maxDiscount && calculatedDiscount > voucher.maxDiscount) {
+          calculatedDiscount = voucher.maxDiscount;
+        }
+      } else {
+        calculatedDiscount = voucher.discountValue;
+      }
+    } else if (banner) {
+      calculatedDiscount = Math.round((cartSubtotal * banner.discountPercent) / 100);
+    }
+
     setCart(prev => ({
       ...prev,
-      promoCode: promo.code,
+      promoCode: trimmed,
       discount: calculatedDiscount
     }));
 
     sounds.playClick();
-    triggerToast('Promo Applied!', `${promo.discountPercent}% discount (₨ ${calculatedDiscount} OFF)`, 'success');
+    triggerToast('Promo Applied!', `₨ ${calculatedDiscount} discount applied to your order!`, 'success');
     return { success: true, message: `Promo applied! You saved ₨ ${calculatedDiscount}` };
   };
 
@@ -1551,19 +1628,133 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addBannerPromo = async (promoData: Omit<BannerPromo, 'id'>) => {
     const promoId = 'promo-' + Date.now();
-    const newPromo: BannerPromo = { ...promoData, id: promoId };
+    const newPromo: BannerPromo = { ...promoData, id: promoId, active: true };
     try {
-      await setDoc(doc(db, 'promos', promoId), newPromo);
+      await savePromoToFirestore(newPromo);
     } catch {}
     setBannerPromos(prev => [newPromo, ...prev]);
+    // Also sync to promoCodes if not already there
+    setPromoCodes(prev => [
+      {
+        code: newPromo.code.toUpperCase(),
+        discountType: 'percentage',
+        discountValue: newPromo.discountPercent,
+        minOrderValue: 250,
+        expiryDate: '2026-12-31',
+        isActive: true
+      },
+      ...prev.filter(c => c.code.toUpperCase() !== newPromo.code.toUpperCase())
+    ]);
     triggerToast('Banner Added', 'New promotion published', 'success');
   };
 
   const deleteBannerPromo = async (id: string) => {
+    const target = bannerPromos.find(p => p.id === id);
     try {
-      await deleteDoc(doc(db, 'promos', id));
+      await deletePromoFromFirestore(id);
     } catch {}
     setBannerPromos(prev => prev.filter(p => p.id !== id));
+    if (target) {
+      setPromoCodes(prev => prev.filter(c => c.code.toUpperCase() !== target.code.toUpperCase()));
+      if (cart.promoCode.toUpperCase() === target.code.toUpperCase()) {
+        setCart(prev => ({ ...prev, promoCode: '', discount: 0 }));
+      }
+    }
+    triggerToast('Promotion Deleted', 'Promotion removed successfully', 'info');
+  };
+
+  const toggleBannerPromoActive = async (id: string) => {
+    let newStatus = false;
+    let promoCodeName = '';
+
+    setBannerPromos(prev => prev.map(p => {
+      if (p.id === id) {
+        newStatus = !p.active;
+        promoCodeName = p.code;
+        return { ...p, active: newStatus };
+      }
+      return p;
+    }));
+
+    // If there is a matching promo code, sync its active status
+    if (promoCodeName) {
+      setPromoCodes(prev => prev.map(c => 
+        c.code.toUpperCase() === promoCodeName.toUpperCase() ? { ...c, isActive: newStatus } : c
+      ));
+
+      // If cart has this promo and it is deactivated, remove from cart
+      if (!newStatus && cart.promoCode.toUpperCase() === promoCodeName.toUpperCase()) {
+        setCart(prev => ({ ...prev, promoCode: '', discount: 0 }));
+      }
+    }
+
+    try {
+      await updatePromoStatusInFirestore(id, newStatus);
+    } catch {}
+
+    triggerToast(
+      newStatus ? 'Promotion Activated' : 'Promotion Deactivated',
+      newStatus ? `Promotion ${promoCodeName || id} is now live` : `Promotion ${promoCodeName || id} deactivated and disabled`,
+      newStatus ? 'success' : 'info'
+    );
+  };
+
+  const togglePromoCodeActive = async (code: string) => {
+    const upperCode = code.toUpperCase();
+    let newStatus = false;
+
+    setPromoCodes(prev => prev.map(c => {
+      if (c.code.toUpperCase() === upperCode) {
+        newStatus = !c.isActive;
+        return { ...c, isActive: newStatus };
+      }
+      return c;
+    }));
+
+    // Sync matching banner promo as well
+    const matchingBanner = bannerPromos.find(p => p.code.toUpperCase() === upperCode);
+    if (matchingBanner) {
+      setBannerPromos(prev => prev.map(p => 
+        p.code.toUpperCase() === upperCode ? { ...p, active: newStatus } : p
+      ));
+      try {
+        await updatePromoStatusInFirestore(matchingBanner.id, newStatus);
+      } catch {}
+    }
+
+    // Remove from cart if active cart has it
+    if (!newStatus && cart.promoCode.toUpperCase() === upperCode) {
+      setCart(prev => ({ ...prev, promoCode: '', discount: 0 }));
+    }
+
+    triggerToast(
+      newStatus ? 'Voucher Activated' : 'Voucher Deactivated',
+      newStatus ? `Voucher ${upperCode} is now active` : `Voucher ${upperCode} is deactivated and cannot be used`,
+      newStatus ? 'success' : 'info'
+    );
+  };
+
+  const addPromoCode = (promo: PromoCode) => {
+    const upperCode = promo.code.toUpperCase();
+    const newPromo: PromoCode = { ...promo, code: upperCode, isActive: true };
+    setPromoCodes(prev => [newPromo, ...prev.filter(c => c.code.toUpperCase() !== upperCode)]);
+    triggerToast('Voucher Added', `Code ${upperCode} is now active for Matli customers`, 'success');
+  };
+
+  const deletePromoCode = async (code: string) => {
+    const upperCode = code.toUpperCase();
+    setPromoCodes(prev => prev.filter(c => c.code.toUpperCase() !== upperCode));
+    const matchingBanner = bannerPromos.find(p => p.code.toUpperCase() === upperCode);
+    if (matchingBanner) {
+      setBannerPromos(prev => prev.filter(p => p.code.toUpperCase() !== upperCode));
+      try {
+        await deletePromoFromFirestore(matchingBanner.id);
+      } catch {}
+    }
+    if (cart.promoCode.toUpperCase() === upperCode) {
+      setCart(prev => ({ ...prev, promoCode: '', discount: 0 }));
+    }
+    triggerToast('Voucher Deleted', `Promo code ${upperCode} deleted permanently`, 'info');
   };
 
   const setCurrentUser = (user: User) => {
@@ -2134,6 +2325,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteCategory,
         addBannerPromo,
         deleteBannerPromo,
+        toggleBannerPromoActive,
+        promoCodes,
+        togglePromoCodeActive,
+        addPromoCode,
+        deletePromoCode,
         aloChatMessages,
         sendAloChatMessage,
         isAloChatOpen,

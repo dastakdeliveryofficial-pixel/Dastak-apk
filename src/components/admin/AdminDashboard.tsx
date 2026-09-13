@@ -41,7 +41,15 @@ export const AdminDashboard: React.FC = () => {
     firestoreNotifications,
     markNotificationAsRead,
     isSoundEnabled,
-    setIsSoundEnabled
+    setIsSoundEnabled,
+    bannerPromos,
+    toggleBannerPromoActive,
+    deleteBannerPromo,
+    addBannerPromo,
+    promoCodes,
+    togglePromoCodeActive,
+    addPromoCode,
+    deletePromoCode
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'vendors' | 'riders' | 'settings' | 'vouchers'>('overview');
@@ -75,15 +83,23 @@ export const AdminDashboard: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<MenuItem | null>(null);
 
   // Promo code form state
-  const [promoCodesList, setPromoCodesList] = useState<PromoCode[]>([
-    { code: 'MATLI20', discountType: 'percentage', discountValue: 20, minOrderValue: 300, maxDiscount: 150, expiryDate: '2026-12-31', isActive: true },
-    { code: 'FREESHIP', discountType: 'fixed', discountValue: 60, minOrderValue: 400, expiryDate: '2026-12-31', isActive: true },
-    { code: 'WELCOME100', discountType: 'fixed', discountValue: 100, minOrderValue: 500, expiryDate: '2026-12-31', isActive: true }
-  ]);
-
   const [newPromoCode, setNewPromoCode] = useState('');
   const [newPromoValue, setNewPromoValue] = useState(20);
   const [newPromoType, setNewPromoType] = useState<'percentage' | 'fixed'>('percentage');
+
+  const handleCreateVoucher = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPromoCode.trim()) return;
+    addPromoCode({
+      code: newPromoCode.trim().toUpperCase(),
+      discountType: newPromoType,
+      discountValue: Number(newPromoValue),
+      minOrderValue: 250,
+      expiryDate: '2026-12-31',
+      isActive: true
+    });
+    setNewPromoCode('');
+  };
 
   const handleAddProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,19 +150,15 @@ export const AdminDashboard: React.FC = () => {
     e.preventDefault();
     if (!newPromoCode.trim()) return;
 
-    setPromoCodesList([
-      ...promoCodesList,
-      {
-        code: newPromoCode.trim().toUpperCase(),
-        discountType: newPromoType,
-        discountValue: Number(newPromoValue),
-        minOrderValue: 250,
-        expiryDate: '2026-12-31',
-        isActive: true
-      }
-    ]);
+    addPromoCode({
+      code: newPromoCode.trim().toUpperCase(),
+      discountType: newPromoType,
+      discountValue: Number(newPromoValue),
+      minOrderValue: 250,
+      expiryDate: '2026-12-31',
+      isActive: true
+    });
     setNewPromoCode('');
-    triggerToast('Promo Created', `Promo voucher ${newPromoCode.toUpperCase()} activated for Matli`, 'success');
   };
 
   const handleAddVendorSubmit = (e: React.FormEvent) => {
@@ -1126,15 +1138,17 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 5: VOUCHERS */}
+        {/* TAB 5: VOUCHERS & PROMOTIONS */}
         {activeTab === 'vouchers' && (
-          <div className="mt-6 space-y-6">
-            <div className="bg-white rounded-3xl p-5 border border-pink-100 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-gray-900">
-                Create New Promo Code for Matli Customers
-              </h3>
+          <div className="mt-6 space-y-8">
+            {/* Create New Voucher Card */}
+            <div className="bg-white rounded-3xl p-6 border border-pink-100 shadow-sm max-w-2xl">
+              <div className="flex items-center gap-2 mb-4">
+                <Tag className="w-5 h-5 text-[#E11D74]" />
+                <h3 className="font-bold text-base text-gray-900">Create New Promo Code for Matli Customers</h3>
+              </div>
 
-              <form onSubmit={handleAddPromo} className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+              <form onSubmit={handleCreateVoucher} className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
                 <div>
                   <label className="font-bold text-gray-700 block mb-1">Voucher Code</label>
                   <input
@@ -1182,40 +1196,166 @@ export const AdminDashboard: React.FC = () => {
               </form>
             </div>
 
-            {/* Active Vouchers List */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {promoCodesList.map((promo) => (
-                <div
-                  key={promo.code}
-                  className="bg-white rounded-3xl p-4 border border-pink-100 shadow-sm flex flex-col justify-between gap-3"
-                >
-                  <div className="flex items-start justify-between">
-                    <span className="font-mono font-bold text-sm text-[#E11D74] bg-pink-50 px-2 py-0.5 rounded-lg border border-pink-200">
-                      {promo.code}
-                    </span>
-                    <span className="text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      ACTIVE
-                    </span>
-                  </div>
-
-                  <div className="text-xs space-y-1 text-gray-600">
-                    <p className="font-bold text-gray-900">
-                      {promo.discountType === 'percentage' ? `${promo.discountValue}% OFF` : `₨ ${promo.discountValue} FLAT OFF`}
-                    </p>
-                    <p className="text-gray-400">Minimum Order: ₨ {promo.minOrderValue}</p>
-                    <p className="text-[10px] text-gray-400">Valid until {promo.expiryDate}</p>
-                  </div>
-
-                  <div className="pt-2 border-t border-pink-100 flex justify-end">
-                    <button
-                      onClick={() => setPromoCodesList(promoCodesList.filter(p => p.code !== promo.code))}
-                      className="text-xs text-rose-600 hover:underline font-semibold"
-                    >
-                      Deactivate
-                    </button>
-                  </div>
+            {/* Promotional Banners Management */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-[#E11D74]" />
+                    <span>Home Page Promotional Banners ({bannerPromos.length})</span>
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Banners displayed to customers on the app home screen. Toggle to deactivate or activate.
+                  </p>
                 </div>
-              ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {bannerPromos.map((promo) => {
+                  const isActive = promo.active !== false;
+                  return (
+                    <div
+                      key={promo.id}
+                      className={`bg-white rounded-3xl p-4 border transition-all shadow-sm flex flex-col justify-between gap-3 ${
+                        isActive ? 'border-pink-200' : 'border-gray-200 opacity-75 bg-gray-50/70'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="font-mono font-bold text-xs text-[#E11D74] bg-pink-50 px-2.5 py-1 rounded-lg border border-pink-200 inline-block">
+                            {promo.code}
+                          </span>
+                          <h4 className="font-bold text-sm text-gray-900 mt-1.5">{promo.title}</h4>
+                          <p className="text-xs text-gray-500">{promo.subtitle}</p>
+                        </div>
+                        <span
+                          className={`text-[10px] font-black px-2.5 py-1 rounded-full border uppercase tracking-wider ${
+                            isActive
+                              ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                              : 'text-rose-700 bg-rose-50 border-rose-300'
+                          }`}
+                        >
+                          {isActive ? 'ACTIVE' : 'DEACTIVATED'}
+                        </span>
+                      </div>
+
+                      <div className="relative h-24 rounded-2xl overflow-hidden bg-pink-100">
+                        <img
+                          src={promo.image}
+                          alt={promo.title}
+                          referrerPolicy="no-referrer"
+                          className={`w-full h-full object-cover ${!isActive ? 'grayscale' : ''}`}
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2.5">
+                          <span className="text-white text-xs font-bold bg-[#E11D74]/90 px-2 py-0.5 rounded-md">
+                            {promo.discountPercent}% OFF
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-pink-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleBannerPromoActive(promo.id)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                            isActive
+                              ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200'
+                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>{isActive ? 'Deactivate' : 'Activate'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteBannerPromo(promo.id)}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                          title="Delete promotion"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Discount Vouchers List */}
+            <div>
+              <div className="mb-3">
+                <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                  <Tag className="w-4 h-4 text-[#E11D74]" />
+                  <span>Discount Vouchers & Coupon Codes ({promoCodes.length})</span>
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Customers enter these codes at checkout. Deactivated vouchers cannot be applied.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {promoCodes.map((promo) => {
+                  const isActive = promo.isActive !== false;
+                  return (
+                    <div
+                      key={promo.code}
+                      className={`bg-white rounded-3xl p-4 border transition-all shadow-sm flex flex-col justify-between gap-3 ${
+                        isActive ? 'border-pink-200' : 'border-gray-200 opacity-75 bg-gray-50/70'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <span className="font-mono font-bold text-sm text-[#E11D74] bg-pink-50 px-2.5 py-1 rounded-lg border border-pink-200">
+                          {promo.code}
+                        </span>
+                        <span
+                          className={`text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                            isActive
+                              ? 'text-emerald-700 bg-emerald-50 border-emerald-300'
+                              : 'text-rose-700 bg-rose-50 border-rose-300'
+                          }`}
+                        >
+                          {isActive ? 'ACTIVE' : 'DEACTIVATED'}
+                        </span>
+                      </div>
+
+                      <div className="text-xs space-y-1 text-gray-600">
+                        <p className="font-bold text-gray-900 text-sm">
+                          {promo.discountType === 'percentage' ? `${promo.discountValue}% OFF` : `₨ ${promo.discountValue} FLAT OFF`}
+                        </p>
+                        <p className="text-gray-500">Minimum Order: ₨ {promo.minOrderValue}</p>
+                        {promo.maxDiscount && (
+                          <p className="text-gray-500">Max Discount: ₨ {promo.maxDiscount}</p>
+                        )}
+                        <p className="text-[10px] text-gray-400">Valid until {promo.expiryDate}</p>
+                      </div>
+
+                      <div className="pt-2 border-t border-pink-100 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => togglePromoCodeActive(promo.code)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                            isActive
+                              ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200'
+                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          {isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deletePromoCode(promo.code)}
+                          className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                          title="Delete voucher"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}

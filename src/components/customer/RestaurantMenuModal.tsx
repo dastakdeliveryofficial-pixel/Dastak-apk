@@ -58,12 +58,22 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
   const filteredItems = restaurantMenu.filter(item => {
     if (selectedCat !== 'all' && item.category !== selectedCat) return false;
     if (searchItem.trim()) {
-      const q = searchItem.toLowerCase();
+      const q = searchItem.toLowerCase().trim();
       const localizedName = getItemName(item).toLowerCase();
       const localizedDesc = getItemDesc(item).toLowerCase();
+      const normName = (item.name || '').toLowerCase();
+      const normUrdu = (item.nameUrdu || '').toLowerCase();
+      const normSindhi = (item.nameSindhi || '').toLowerCase();
+      const normCat = (item.category || '').toLowerCase();
+      const normDesc = (item.description || '').toLowerCase();
+
       return localizedName.includes(q) || 
              localizedDesc.includes(q) ||
-             item.name.toLowerCase().includes(q);
+             normName.includes(q) ||
+             normUrdu.includes(q) ||
+             normSindhi.includes(q) ||
+             normCat.includes(q) ||
+             normDesc.includes(q);
     }
     return true;
   });
