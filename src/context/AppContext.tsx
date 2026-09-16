@@ -258,6 +258,9 @@ interface AppContextType {
   // Customer Orders & History Count (real-time synced)
   customerOrders: Order[];
   customerOrderCount: number;
+  activeCustomerOrder: Order | null;
+  recordCustomerPhone: (phone: string) => void;
+  recordDevicePlacedOrder: (orderId: string, orderNumber?: string, phone?: string) => void;
 
   // Reset demo data
   resetToDefaultData: () => void;
@@ -267,11 +270,30 @@ interface AppContextType {
   setIsApkModalOpen: (open: boolean) => void;
   openApkModal: () => void;
   closeApkModal: () => void;
+
+  // AI Brain Assistant
+  isAIBrainOpen: boolean;
+  setIsAIBrainOpen: (open: boolean) => void;
+  openAIBrain: () => void;
+  closeAIBrain: () => void;
+  toggleAIBrain: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const LOCAL_STORAGE_KEY = 'dastak_delivery_app_state_v1';
+
+export function normalizePhone(phone?: string | null): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('92') && digits.length >= 11) {
+    return digits.slice(2);
+  }
+  if (digits.startsWith('0') && digits.length >= 10) {
+    return digits.slice(1);
+  }
+  return digits;
+}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
@@ -387,6 +409,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [restaurants, setRestaurants] = useState<Restaurant[]>(INITIAL_RESTAURANTS);
   const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
   const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+
+  // Device-level placed orders and phone numbers to guarantee orders show for customer
+  const [devicePlacedOrderIds, setDevicePlacedOrderIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_device_order_ids');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [devicePhones, setDevicePhones] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_device_phones');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [riders, setRiders] = useState<Rider[]>(INITIAL_RIDERS);
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
   const [bannerPromos, setBannerPromos] = useState<BannerPromo[]>(() => {
@@ -527,6 +568,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isApkModalOpen, setIsApkModalOpen] = useState(false);
   const openApkModal = () => setIsApkModalOpen(true);
   const closeApkModal = () => setIsApkModalOpen(false);
+
+  // AI Brain Assistant Modal state
+  const [isAIBrainOpen, setIsAIBrainOpen] = useState(false);
+  const openAIBrain = () => setIsAIBrainOpen(true);
+  const closeAIBrain = () => setIsAIBrainOpen(false);
+  const toggleAIBrain = () => setIsAIBrainOpen(prev => !prev);
   const [isSoundEnabled, setIsSoundEnabledState] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_sound_pref');
@@ -1343,18 +1390,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdOrder = { ...orderData, id: fallbackId };
     }
 
+    // Immediately record on device so this customer ALWAYS sees this order across sessions
+    const placedPhone = deliveryAddress.phone || safeUser.phone || '0300-1234567';
+    recordDevicePlacedOrder(createdOrder.id, orderNum, placedPhone);
+
     // Immediately update local orders list so customerOrderCount increments right away!
     setOrders(prev => [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)]);
 
-    // 2. Write to Firestore "notifications" collection for real-time Admin/Rider alerts!
+    // Customer In-App Notification specifically for customer role (bell icon)
     const itemsFormatted = cart.items.map(i => `${i.quantity}x ${i.name}${i.restaurantName ? ` (${i.restaurantName})` : ''}`).join(', ');
     const notifTime = new Date().toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' });
+
+    dispatchOmniNotification({
+      targetRole: 'customer',
+      orderId: createdOrder.id,
+      orderNumber: orderNum,
+      customerName: safeUser.name || 'Matli Customer',
+      items: itemsFormatted,
+      title: `🛍️ Order Placed #${orderNum}`,
+      message: `Your order from ${combinedRestName} (₨ ${cartTotal}) has been received!`,
+      type: 'order',
+      action: {
+        role: 'customer',
+        orderId: createdOrder.id
+      }
+    });
+
+    // 2. Write to Firestore "notifications" collection for real-time Admin/Rider alerts!
     try {
       await createFirestoreNotification({
         orderId: createdOrder.id,
         orderNumber: orderNum,
         customerName: safeUser.name || deliveryAddress.phone || 'Matli Customer',
-        customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
+        customerPhone: placedPhone,
         restaurantName: combinedRestName,
         items: itemsFormatted,
         total: cartTotal,
@@ -1806,6 +1874,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (rd) riderId = rd.id;
     }
 
+    if (user.phone) {
+      recordCustomerPhone(user.phone);
+    }
     syncAuthSession(true, user, targetRole, vendorRestId, riderId);
     setIsAuthModalOpen(false);
     triggerToast('Welcome Back!', `Logged in successfully as ${user.name || user.email}`, 'success');
@@ -1943,6 +2014,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
+    if (role === 'customer' && targetUser.phone) {
+      recordCustomerPhone(targetUser.phone);
+    }
     syncAuthSession(true, targetUser, role, extra?.restaurantId, extra?.riderId);
     setIsAuthModalOpen(false);
   };
@@ -2113,18 +2187,92 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newRider;
   };
 
-  // Real-time Customer Orders and Order Count
-  const customerOrders = React.useMemo(() => {
-    return orders.filter(o => {
-      return (
-        o.customerId === currentUser?.id ||
-        (Boolean(currentUser?.phone) && o.customerPhone === currentUser?.phone) ||
-        (Boolean(currentUser?.name) && o.customerName === currentUser?.name)
-      );
+  const recordCustomerPhone = (phone: string) => {
+    if (!phone) return;
+    setDevicePhones(prev => {
+      const updated = Array.from(new Set([phone, ...prev]));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_device_phones', JSON.stringify(updated));
+      } catch {}
+      return updated;
     });
-  }, [orders, currentUser?.id, currentUser?.phone, currentUser?.name]);
+  };
+
+  const recordDevicePlacedOrder = (orderId: string, orderNumber?: string, phone?: string) => {
+    setDevicePlacedOrderIds(prev => {
+      const updated = Array.from(new Set([orderId, orderNumber || '', ...prev].filter(Boolean)));
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_device_order_ids', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    if (phone) {
+      recordCustomerPhone(phone);
+    }
+  };
+
+  // Real-time Customer Orders and Order Count - Multi-vector matching guarantees customer sees all their orders
+  const customerOrders = React.useMemo(() => {
+    const currentNormPhone = normalizePhone(currentUser?.phone);
+    const userAddrNormPhones = (currentUser?.addresses || [])
+      .map(a => normalizePhone(a.phone))
+      .filter(Boolean);
+    const devNormPhones = devicePhones
+      .map(p => normalizePhone(p))
+      .filter(Boolean);
+
+    const allMatchingPhones = new Set<string>([
+      ...(currentNormPhone ? [currentNormPhone] : []),
+      ...userAddrNormPhones,
+      ...devNormPhones
+    ]);
+
+    return (orders || []).filter(o => {
+      // 1. Matched by device placed order ID or order number
+      if (devicePlacedOrderIds.includes(o.id) || (o.orderNumber && devicePlacedOrderIds.includes(o.orderNumber))) {
+        return true;
+      }
+
+      // 2. Matched by customerId
+      if (currentUser?.id && o.customerId === currentUser.id) {
+        return true;
+      }
+
+      // 3. Matched by email
+      if (currentUser?.email && o.customerEmail && o.customerEmail.toLowerCase() === currentUser.email.toLowerCase()) {
+        return true;
+      }
+
+      // 4. Matched by normalized phone (profile phone, address phones, or device phones)
+      const orderNormPhone = normalizePhone(o.customerPhone);
+      if (orderNormPhone && allMatchingPhones.has(orderNormPhone)) {
+        return true;
+      }
+
+      // 5. Matched by custom customer name (ignoring default/generic names)
+      if (
+        currentUser?.name &&
+        currentUser.name.trim() !== '' &&
+        currentUser.name !== 'Matli Customer' &&
+        currentUser.name !== 'Guest' &&
+        o.customerName &&
+        o.customerName.toLowerCase().trim() === currentUser.name.toLowerCase().trim()
+      ) {
+        return true;
+      }
+
+      return false;
+    });
+  }, [orders, currentUser?.id, currentUser?.phone, currentUser?.name, currentUser?.email, currentUser?.addresses, devicePlacedOrderIds, devicePhones]);
 
   const customerOrderCount = customerOrders.length;
+
+  const activeCustomerOrder = React.useMemo(() => {
+    return customerOrders.find(
+      o => o.status !== 'delivered' && o.status !== 'cancelled'
+    ) || null;
+  }, [customerOrders]);
 
   const logoutUser = async () => {
     try {
@@ -2345,6 +2493,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unreadFirestoreNotifCount,
         customerOrders,
         customerOrderCount,
+        activeCustomerOrder,
+        recordCustomerPhone,
+        recordDevicePlacedOrder,
         isNotificationCenterOpen,
         setIsNotificationCenterOpen,
         openNotificationCenter,
@@ -2360,7 +2511,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isApkModalOpen,
         setIsApkModalOpen,
         openApkModal,
-        closeApkModal
+        closeApkModal,
+        isAIBrainOpen,
+        setIsAIBrainOpen,
+        openAIBrain,
+        closeAIBrain,
+        toggleAIBrain
       }}
     >
       {children}

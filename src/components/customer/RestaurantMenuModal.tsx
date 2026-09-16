@@ -238,7 +238,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredItems.map((item) => {
+              {filteredItems.map((item, idx) => {
                 const cartItem = cart.items.find(i => i.menuItemId === item.id);
                 const quantityInCart = cartItem ? cartItem.quantity : 0;
                 const itemName = getItemName(item);
@@ -246,7 +246,7 @@ export const RestaurantMenuModal: React.FC<RestaurantMenuModalProps> = ({
 
                 return (
                   <div
-                    key={item.id}
+                    key={`${item.id}-${idx}`}
                     className={`bg-white rounded-2xl p-4 border transition-all flex gap-4 ${
                       item.isAvailable
                         ? 'border-pink-100 shadow-sm hover:border-pink-200'

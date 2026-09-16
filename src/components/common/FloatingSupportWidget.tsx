@@ -1,65 +1,99 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  MessageSquare, Bot, UserCheck, X, Send, Sparkles, 
-  Store, Bike, Tag, HelpCircle, PhoneCall, ChevronRight, 
-  CornerDownLeft, ExternalLink, RefreshCw 
+  Bot, X, Send, Sparkles, Utensils, 
+  ExternalLink, RotateCcw, Volume2, 
+  VolumeX, HelpCircle, MessageSquare, Copy, Check,
+  Flame, Clock, Bike, Tag, Compass
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { openWhatsAppChat } from '../../utils/whatsapp';
-import { AIAgentMessage } from '../../types';
+import { AIAgentMessage, Restaurant } from '../../types';
 
-export const FloatingSupportWidget: React.FC = () => {
+interface FloatingSupportWidgetProps {
+  onSelectRestaurant?: (restaurant: Restaurant) => void;
+  onTrackOrder?: (orderId: string) => void;
+}
+
+export const FloatingSupportWidget: React.FC<FloatingSupportWidgetProps> = ({
+  onSelectRestaurant,
+  onTrackOrder
+}) => {
   const { 
     restaurants, 
     orders, 
     currentUser, 
-    setSelectedRestaurant, 
-    setTrackingOrderId, 
-    setCurrentRole,
+    cart,
     platformSettings,
-    language 
+    language,
+    isAIBrainOpen,
+    setIsAIBrainOpen,
+    openAIBrain,
+    closeAIBrain,
+    setSelectedRestaurant,
+    setTrackingOrderId,
+    triggerToast
   } = useApp();
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [chatMode, setChatMode] = useState<'agent' | 'human'>('agent');
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
-  // Human support form
-  const [humanTopic, setHumanTopic] = useState('General Food Order Inquiry');
+  // Suggested prompt categories
+  const quickPrompts = [
+    { label: '🍛 Best Biryani in Matli?', query: 'Matli mein sab se achi Biryani kahan se milegi?' },
+    { label: '🛵 Delivery charges & time?', query: 'Matli mein delivery fee aur time kitna hai?' },
+    { label: '🏷️ Today discount coupons?', query: 'Aaj ke discount coupons aur promo codes kya hain?' },
+    { label: '📦 Track my current order', query: 'Mera active order kahan hai aur kab tak pohnchega?' },
+    { label: '🍕 Fast food & Pizza deals', query: 'Matli ke best fast food, pizza aur burger deals batayein' },
+    { label: '☕ Quetta Chai & Nashta', query: 'Subah ke nashte aur garma garam chai ke liye best hotel kaunsa hai?' }
+  ];
 
-  // AI Chat conversation messages
-  const [messages, setMessages] = useState<AIAgentMessage[]>([
-    {
-      id: 'welcome-1',
-      sender: 'assistant',
-      text: language === 'ur'
-        ? 'السلام علیکم! میں دستک ڈیلیوری ماتلی کا AI اسسٹنٹ ہوں۔ میں آپ کو بہترین ہوٹل، بریانی، فاسٹ فوڈ اور آرڈر ٹریکنگ میں مدد دے سکتا ہوں۔'
-        : language === 'sd'
-        ? 'اسلام عليڪم! مان دستڪ ڊليوري ماتلي جو AI اسسٽنٽ آهيان. مان اوهان جي کاڌي جي آرڊر ۽ هوٽلن بابت مدد ڪري سگهان ٿو.'
-        : 'Assalam o Alaikum! I am your Dastak AI Food Assistant for Matli. How can I help you enjoy delicious food today?',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      suggestions: [
-        '🍛 Best Biryani in Matli?',
-        '🛵 Delivery charges & time?',
-        '🏷️ Today discount coupons?',
-        '📦 Track my current order'
-      ]
-    }
-  ]);
+  // AI Chat conversation history
+  const [messages, setMessages] = useState<AIAgentMessage[]>(() => {
+    const welcomeText = language === 'ur'
+      ? 'السلام علیکم! میں دستک ڈیلیوری ماتلی کا AI برین (ذہین معاون) ہوں۔ میں آپ کو ماتلی کے ہوٹلوں، بریانی، پیزا، ڈسکاؤنٹ اور آرڈر ٹریکنگ میں فوری مدد فراہم کر سکتا ہوں۔ آپ مجھ سے اردو، سندھی یا رومن اردو میں پوچھ سکتے ہیں!'
+      : language === 'sd'
+      ? 'اسلام عليڪم! مان دستڪ ڊليوري ماتلي جو AI برين آهيان. مان اوهان کي ماتلي جي هوٽلن، کاڌن جي آرڊر، آفرز ۽ ڊليوري بابت مڪمل ڄاڻ ڏئي سگهان ٿو. ڇا کائڻ چاهيو ٿا؟'
+      : 'Assalam o Alaikum! I am the Dastak AI Brain for Matli. Ask me anything about local restaurants, Biryani, deals, delivery rates, or your live order!';
+
+    return [
+      {
+        id: 'welcome-init',
+        sender: 'assistant',
+        text: welcomeText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestions: [
+          '🍛 Best Biryani in Matli?',
+          '🛵 Delivery charges & time?',
+          '🏷️ Today discount coupons?',
+          '📦 Track my current order'
+        ]
+      }
+    ];
+  });
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isAIBrainOpen) {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isTyping, isOpen, chatMode]);
+  }, [messages, isTyping, isAIBrainOpen]);
 
-  const handleSendMessage = (textToSend?: string) => {
+  // Clean up speech on unmount
+  useEffect(() => {
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputMessage).trim();
-    if (!query) return;
+    if (!query || isTyping) return;
 
     const userMsg: AIAgentMessage = {
       id: 'user-' + Date.now(),
@@ -72,305 +106,452 @@ export const FloatingSupportWidget: React.FC = () => {
     setInputMessage('');
     setIsTyping(true);
 
-    // AI Brain processing
-    setTimeout(() => {
-      const q = query.toLowerCase();
-      let reply = '';
-      let suggestions: string[] = [];
-      let actionType: AIAgentMessage['actionType'] = undefined;
-      let actionTarget: string | undefined = undefined;
+    // Active customer order if any
+    const activeOrder = orders.find(o => o.status !== 'delivered' && o.status !== 'cancelled') || orders[0] || null;
 
-      if (q.includes('biryani') || q.includes('بریانی') || q.includes('چاول')) {
-        const biryaniRest = restaurants.find(r => r.name.toLowerCase().includes('biryani') || r.description.toLowerCase().includes('biryani')) || restaurants[0];
-        reply = `Matli ki famous Biryani **${biryaniRest.name}** par available hai! Special Matli Chicken Dum Biryani & Beef Pulao serve hoti hai with raita and salad. Delivery time 20-30 mins hai.`;
-        suggestions = ['Open Al-Madina Biryani Menu', 'Show Biryani Deals', 'Delivery Time?'];
-        actionType = 'restaurant';
-        actionTarget = biryaniRest.id;
-      } else if (q.includes('delivery') || q.includes('charge') || q.includes('time') || q.includes('ڈیلیوری') || q.includes('خرچ')) {
-        reply = `Matli city mein hamari standard delivery fee **₨ ${platformSettings.baseDeliveryFee}** hai. Average delivery time 25-35 minutes hai across Shahi Bazaar, Station Road, Memon Colony & Tando Ghulam Ali Road!`;
-        suggestions = ['Order Food Now', 'Which restaurants are open?'];
-      } else if (q.includes('discount') || q.includes('coupon') || q.includes('voucher') || q.includes('ڈسکاؤنٹ') || q.includes('کوپن')) {
-        reply = `Aaj ke hot promo coupons: \n• **MATLI20** (20% OFF on all orders)\n• **FREESHIP** (Free Delivery on min ₨ 400)\n• **WELCOME100** (Flat ₨ 100 OFF for new customers)`;
-        suggestions = ['Apply MATLI20', 'View Top Deals'];
-      } else if (q.includes('track') || q.includes('order') || q.includes('کہاں ہے') || q.includes('آرڈر')) {
-        const lastOrder = orders[0];
-        if (lastOrder) {
-          reply = `Aapka active order **#${lastOrder.orderNumber}** (${lastOrder.restaurantName}) is waqt status: **${lastOrder.status.toUpperCase()}** par hai.`;
-          suggestions = ['Live Map Track', 'Call Rider / Alo Chat'];
-          actionType = 'track';
-          actionTarget = lastOrder.id;
-        } else {
-          reply = `Filhal aapka koi active order nahi mila. Aap Matli ke behtareen restaurants se abhi order place kar sakte hain!`;
-          suggestions = ['Browse Restaurants'];
-        }
-      } else if (q.includes('tea') || q.includes('chai') || q.includes('چائے') || q.includes('ہوٹل')) {
-        reply = `Matli ki mashhoor Karrak Chai **Quetta Royal Chai & Cafe** aur **Rajput Shahi Dhabba** par available hai! Saath mein Maska Bun aur Paratha bhi order kar sakte hain.`;
-        suggestions = ['View Chai Menu', 'Order Breakfast'];
-      } else {
-        reply = `Aapka shukriya! Main Matli Dastak Delivery ka AI system hoon. Main aapko restaurants browse karne, deals dhoondne ya order track karne me madad de sakta hoon. Ya aap direct human helpline se bhi rabta kar sakte hain!`;
-        suggestions = ['Best Biryani in Matli?', 'Delivery charges?', 'Talk to Human Agent'];
+    // Build context object
+    const contextData = {
+      restaurants: restaurants.map(r => ({
+        id: r.id,
+        name: r.name,
+        cuisine: r.cuisine,
+        rating: r.rating,
+        deliveryFee: r.deliveryFee,
+        deliveryTime: r.deliveryTime,
+        description: r.description,
+        popularItems: r.popularItems || ''
+      })),
+      activeOrder: activeOrder ? {
+        id: activeOrder.id,
+        orderNumber: activeOrder.orderNumber,
+        restaurantName: activeOrder.restaurantName,
+        status: activeOrder.status,
+        total: activeOrder.total
+      } : null,
+      cartItemsCount: cart.items.length,
+      cartTotal: cart.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+      userName: currentUser?.name || 'Customer',
+      language
+    };
+
+    try {
+      const res = await fetch('/api/gemini/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: query,
+          history: messages.slice(-6),
+          context: contextData
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('API server returned error: ' + res.status);
       }
+
+      const data = await res.json();
 
       const aiMsg: AIAgentMessage = {
         id: 'ai-' + Date.now(),
         sender: 'assistant',
-        text: reply,
+        text: data.reply || 'Main aapki madad karne ke liye hazir hoon. Dobara poochiye!',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestions,
-        actionType,
-        actionTarget
+        suggestions: Array.isArray(data.suggestions) ? data.suggestions : ['Best Biryani in Matli?', 'Delivery charges?'],
+        actionType: data.actionType && data.actionType !== 'none' ? data.actionType : undefined,
+        actionTarget: data.actionTarget || undefined
       };
 
       setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      console.warn('Backend chat failed, generating local fallback:', err);
+      // Client-side fallback if server is momentarily unreachable
+      const q = query.toLowerCase();
+      let fallbackReply = `Assalam o Alaikum! Dastak AI Brain Matli is online. Matli ke mashhoor restaurants jese Al-Madina Biryani, Quetta Royal Chai, aur Pizza Point par taaza food tayar hai! Standard delivery fee ₨ 50 hai.`;
+      let fallbackSuggestions = ['Best Biryani in Matli?', 'Delivery charges?', 'Track my order'];
+      let actType: AIAgentMessage['actionType'] = undefined;
+      let actTarget: string | undefined = undefined;
+
+      if (q.includes('biryani') || q.includes('بریانی') || q.includes('چاول')) {
+        const biryaniRest = restaurants.find(r => r.name.toLowerCase().includes('biryani')) || restaurants[0];
+        fallbackReply = `Matli ki famous Biryani **${biryaniRest.name}** par available hai! Special Matli Chicken Dum Biryani (₨ 280) aur Beef Pulao serve hoti hai. Delivery time sirf 20-30 mins hai.`;
+        actType = 'restaurant';
+        actTarget = biryaniRest.id;
+        fallbackSuggestions = ['Show Biryani Deals', 'Delivery Time?'];
+      } else if (q.includes('track') || q.includes('order') || q.includes('کہاں ہے') || q.includes('آرڈر')) {
+        if (activeOrder) {
+          fallbackReply = `Aapka active order **#${activeOrder.orderNumber}** (${activeOrder.restaurantName}) is waqt status: **${activeOrder.status.toUpperCase()}** par hai.`;
+          actType = 'track';
+          actTarget = activeOrder.id;
+          fallbackSuggestions = ['Live Map Tracker', 'Order Details'];
+        }
+      }
+
+      setMessages(prev => [...prev, {
+        id: 'ai-' + Date.now(),
+        sender: 'assistant',
+        text: fallbackReply,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestions: fallbackSuggestions,
+        actionType: actType,
+        actionTarget: actTarget
+      }]);
+    } finally {
       setIsTyping(false);
-    }, 700);
+    }
   };
 
   const handleActionClick = (msg: AIAgentMessage) => {
     if (msg.actionType === 'restaurant' && msg.actionTarget) {
       const rest = restaurants.find(r => r.id === msg.actionTarget);
       if (rest) {
+        if (onSelectRestaurant) onSelectRestaurant(rest);
         setSelectedRestaurant(rest);
-        setIsOpen(false);
+        closeAIBrain();
       }
     } else if (msg.actionType === 'track' && msg.actionTarget) {
+      if (onTrackOrder) onTrackOrder(msg.actionTarget);
       setTrackingOrderId(msg.actionTarget);
-      setIsOpen(false);
+      closeAIBrain();
     }
   };
 
-  const handleOpenHumanWhatsApp = () => {
-    const text = `Assalam o Alaikum Dastak Support! I am ${currentUser?.name || 'a customer'} from Matli.\nTopic: *${humanTopic}*\nPlease assist me with my inquiry.`;
+  const handleResetChat = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSpeakingMsgId(null);
+    setMessages([
+      {
+        id: 'welcome-reset',
+        sender: 'assistant',
+        text: 'Chat history cleared! Dastak AI Brain is ready. What would you like to eat or discover in Matli today?',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        suggestions: [
+          '🍛 Best Biryani in Matli?',
+          '🛵 Delivery charges & time?',
+          '🏷️ Today discount coupons?',
+          '📦 Track my current order'
+        ]
+      }
+    ]);
+  };
+
+  const handleSpeakText = (msgId: string, text: string) => {
+    if (!('speechSynthesis' in window)) {
+      triggerToast('Speech not supported', 'Your browser does not support text-to-speech', 'info');
+      return;
+    }
+
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const cleanText = text.replace(/[*_#`]/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+
+    setSpeakingMsgId(msgId);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleCopyText = (msgId: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+    triggerToast('Copied to Clipboard', 'AI response text copied', 'success');
+  };
+
+  const handleOpenEmergencyWhatsApp = () => {
+    const text = `Assalam o Alaikum Dastak Support! I am ${currentUser?.name || 'a customer'} in Matli. I need direct helpline assistance.`;
     openWhatsAppChat(platformSettings.supportWhatsApp || '923012345678', text);
   };
 
   return (
     <>
-      {/* Floating Action Launcher Button */}
+      {/* High-Visibility Floating AI Brain Launcher */}
       <div className="fixed bottom-5 right-5 z-40">
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="relative group flex items-center gap-2.5 bg-[#E11D74] hover:bg-[#C2185B] text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-xl border-2 border-white transition-all transform hover:scale-105 active:scale-95"
-          aria-label="Open Support & AI Chat"
+          type="button"
+          onClick={() => {
+            if (isAIBrainOpen) {
+              closeAIBrain();
+            } else {
+              openAIBrain();
+            }
+          }}
+          className="relative group flex items-center gap-2.5 bg-gradient-to-r from-[#E11D74] via-[#D81B60] to-[#AD1457] hover:brightness-110 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-full shadow-xl shadow-pink-300/40 border-2 border-white transition-all transform hover:scale-105 active:scale-95"
+          aria-label="Open Dastak AI Brain Assistant"
+          title="Dastak AI Brain • 24/7 Smart Food & Delivery Guide"
         >
-          <div className="relative">
-            <Bot className="w-6 h-6" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-[#E11D74] rounded-full animate-ping" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 border-2 border-[#E11D74] rounded-full" />
+          <div className="relative flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-yellow-300 animate-spin" style={{ animationDuration: '8s' }} />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#E11D74] rounded-full animate-ping" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#E11D74] rounded-full" />
           </div>
-          <div className="hidden sm:flex flex-col text-left">
-            <span className="text-xs font-black tracking-wide leading-none">Matli Support & AI</span>
-            <span className="text-[10px] text-pink-100 font-medium leading-tight">AI Brain & WhatsApp</span>
+          <div className="flex flex-col text-left">
+            <span className="text-xs font-black tracking-wide leading-none flex items-center gap-1">
+              AI Brain
+              <span className="text-[9px] bg-white/25 px-1.5 py-0.2 rounded-full font-bold">Matli</span>
+            </span>
+            <span className="text-[10px] text-pink-100 font-medium leading-tight">
+              24/7 Smart Guide
+            </span>
           </div>
         </button>
       </div>
 
-      {/* Support Chat Popup Modal / Drawer */}
+      {/* AI Brain Interactive Dialog / Drawer */}
       <AnimatePresence>
-        {isOpen && (
+        {isAIBrainOpen && (
           <motion.div
             initial={{ opacity: 0, y: 30, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 30, scale: 0.95 }}
-            className="fixed bottom-20 right-4 sm:right-6 z-50 w-[calc(100vw-32px)] sm:w-[420px] bg-white rounded-3xl shadow-2xl border border-pink-200 overflow-hidden flex flex-col h-[560px] max-h-[82vh]"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed bottom-20 right-4 sm:right-6 z-50 w-[calc(100vw-32px)] sm:w-[440px] bg-white rounded-3xl shadow-2xl border border-pink-200 overflow-hidden flex flex-col h-[600px] max-h-[85vh]"
           >
-            {/* Top Bar with Mode Switcher */}
-            <div className="bg-linear-to-r from-[#E11D74] to-[#C2185B] p-4 text-white">
-              <div className="flex items-center justify-between pb-3 border-b border-white/20">
+            {/* Top Bar with AI Status */}
+            <div className="bg-gradient-to-r from-[#E11D74] via-[#D81B60] to-[#AD1457] p-4 text-white shrink-0 shadow-md">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-2xl bg-white/20 backdrop-blur-xs flex items-center justify-center font-bold">
-                    {chatMode === 'agent' ? <Bot className="w-5 h-5 text-white" /> : <UserCheck className="w-5 h-5 text-emerald-300" />}
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center font-bold relative">
+                    <Sparkles className="w-5 h-5 text-yellow-300" />
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#E11D74] rounded-full" />
                   </div>
                   <div>
-                    <h3 className="font-black text-sm tracking-tight leading-tight">
-                      Dastak Matli Live Help
+                    <h3 className="font-black text-sm tracking-tight flex items-center gap-1.5">
+                      Dastak AI Brain
+                      <span className="text-[9px] font-bold bg-white/20 px-2 py-0.5 rounded-full border border-white/30">
+                        Gemini 3.8 Flash
+                      </span>
                     </h3>
-                    <p className="text-[11px] text-pink-100 flex items-center gap-1">
+                    <p className="text-[11px] text-pink-100 flex items-center gap-1.5 mt-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {chatMode === 'agent' ? 'AI Brain Active • 24/7' : 'Human WhatsApp Helpline'}
+                      <span>Online • Matli City Culinary Assistant</span>
                     </p>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="w-7 h-7 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleResetChat}
+                    title="Clear chat and restart"
+                    className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeAIBrain}
+                    title="Close AI Brain"
+                    className="w-8 h-8 rounded-full bg-white/15 hover:bg-white/30 flex items-center justify-center text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
-              {/* 2-Option Mode Switcher Tabs */}
-              <div className="grid grid-cols-2 gap-1.5 mt-3 p-1 bg-black/20 rounded-2xl">
-                <button
-                  onClick={() => setChatMode('agent')}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    chatMode === 'agent'
-                      ? 'bg-white text-[#E11D74] shadow-xs'
-                      : 'text-pink-100 hover:text-white'
-                  }`}
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>Agent Mode (AI Brain)</span>
-                </button>
-
-                <button
-                  onClick={() => setChatMode('human')}
-                  className={`py-1.5 px-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                    chatMode === 'human'
-                      ? 'bg-white text-emerald-700 shadow-xs'
-                      : 'text-pink-100 hover:text-white'
-                  }`}
-                >
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Human Mode (WhatsApp)</span>
-                </button>
+              {/* Quick Feature Badges */}
+              <div className="flex items-center justify-between gap-2 mt-3 pt-2.5 border-t border-white/15 text-[11px] font-medium text-pink-100">
+                <span className="flex items-center gap-1">
+                  <Bike className="w-3.5 h-3.5 text-emerald-300" />
+                  ₨ 50 Flat Delivery
+                </span>
+                <span className="flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-amber-300" />
+                  25-35 Min Fleet
+                </span>
+                <span className="flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-pink-200" />
+                  MATLI20 Active
+                </span>
               </div>
             </div>
 
-            {/* TAB 1: AI AGENT MODE */}
-            {chatMode === 'agent' && (
-              <div className="flex flex-col flex-1 overflow-hidden bg-[#FAF5F7]">
-                {/* Message Log */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
-                  {messages.map((msg) => (
+            {/* Conversation Log */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#FAF5F7] text-xs">
+              {messages.map((msg) => {
+                const isUser = msg.sender === 'user';
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} group`}
+                  >
                     <div
-                      key={msg.id}
-                      className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}
+                      className={`max-w-[88%] p-3.5 rounded-2xl relative ${
+                        isUser
+                          ? 'bg-gradient-to-r from-[#E11D74] to-[#C2185B] text-white rounded-br-xs shadow-sm'
+                          : 'bg-white text-gray-800 border border-pink-100 shadow-sm rounded-bl-xs'
+                      }`}
                     >
-                      <div
-                        className={`max-w-[85%] p-3 rounded-2xl ${
-                          msg.sender === 'user'
-                            ? 'bg-[#E11D74] text-white rounded-br-xs shadow-xs'
-                            : 'bg-white text-gray-800 border border-pink-100 shadow-xs rounded-bl-xs'
-                        }`}
-                      >
-                        <p className="whitespace-pre-line leading-relaxed">{msg.text}</p>
-                        <span className={`block text-[9px] mt-1 ${msg.sender === 'user' ? 'text-pink-200 text-right' : 'text-gray-400'}`}>
-                          {msg.timestamp}
-                        </span>
-                      </div>
+                      <p className="whitespace-pre-line leading-relaxed text-xs">
+                        {msg.text}
+                      </p>
 
-                      {/* Action Jump Button if available */}
-                      {msg.actionType && (
-                        <button
-                          onClick={() => handleActionClick(msg)}
-                          className="mt-1.5 bg-white border border-[#E11D74] text-[#E11D74] hover:bg-pink-50 text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-2xs flex items-center gap-1 transition-colors"
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                          <span>{msg.actionType === 'restaurant' ? 'View Restaurant Menu →' : 'Open Live Tracker →'}</span>
-                        </button>
-                      )}
+                      <div className={`flex items-center justify-between gap-2 mt-2 pt-1 border-t ${isUser ? 'border-white/20 text-pink-200' : 'border-gray-100 text-gray-400'} text-[10px]`}>
+                        <span>{msg.timestamp}</span>
 
-                      {/* Suggestions Chips */}
-                      {msg.suggestions && msg.suggestions.length > 0 && (
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {msg.suggestions.map((sug, idx) => (
+                        {!isUser && (
+                          <div className="flex items-center gap-1.5">
                             <button
-                              key={idx}
-                              onClick={() => {
-                                if (sug.includes('Talk to Human Agent')) {
-                                  setChatMode('human');
-                                } else {
-                                  handleSendMessage(sug);
-                                }
-                              }}
-                              className="text-[10px] font-bold bg-pink-50 hover:bg-pink-100 text-[#E11D74] border border-pink-200 px-2.5 py-1 rounded-lg transition-colors"
+                              type="button"
+                              onClick={() => handleSpeakText(msg.id, msg.text)}
+                              title={speakingMsgId === msg.id ? 'Stop listening' : 'Listen with Speech'}
+                              className="hover:text-[#E11D74] transition-colors p-1"
                             >
-                              {sug}
+                              {speakingMsgId === msg.id ? (
+                                <VolumeX className="w-3.5 h-3.5 text-[#E11D74] animate-pulse" />
+                              ) : (
+                                <Volume2 className="w-3.5 h-3.5" />
+                              )}
                             </button>
-                          ))}
-                        </div>
-                      )}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(msg.id, msg.text)}
+                              title="Copy response"
+                              className="hover:text-[#E11D74] transition-colors p-1"
+                            >
+                              {copiedMsgId === msg.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  ))}
 
-                  {isTyping && (
-                    <div className="flex items-center gap-1.5 p-3 bg-white rounded-2xl border border-pink-100 w-24 text-gray-400">
-                      <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce" />
-                      <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce [animation-delay:0.2s]" />
-                      <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce [animation-delay:0.4s]" />
-                    </div>
-                  )}
+                    {/* Action Jump Card if AI suggests a menu or live order */}
+                    {msg.actionType && (
+                      <div className="mt-2 w-full max-w-[88%]">
+                        <button
+                          type="button"
+                          onClick={() => handleActionClick(msg)}
+                          className="w-full bg-white border-2 border-[#E11D74] text-[#E11D74] hover:bg-pink-50 text-xs font-black px-3.5 py-2.5 rounded-2xl shadow-sm flex items-center justify-center gap-2 transition-all transform hover:scale-[1.01]"
+                        >
+                          {msg.actionType === 'restaurant' ? (
+                            <>
+                              <Utensils className="w-4 h-4" />
+                              <span>View Recommended Menu →</span>
+                            </>
+                          ) : msg.actionType === 'track' ? (
+                            <>
+                              <Compass className="w-4 h-4" />
+                              <span>Open Live Order Tracker →</span>
+                            </>
+                          ) : (
+                            <>
+                              <Tag className="w-4 h-4" />
+                              <span>View Discount Deals →</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
 
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Agent Chat Input */}
-                <div className="p-3 bg-white border-t border-pink-100 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSendMessage(); }}
-                    placeholder="Ask AI for food, menus, rates in Matli..."
-                    className="flex-1 text-xs p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
-                  />
-                  <button
-                    onClick={() => handleSendMessage()}
-                    disabled={!inputMessage.trim()}
-                    className="w-9 h-9 rounded-xl bg-[#E11D74] hover:bg-[#C2185B] disabled:opacity-40 text-white flex items-center justify-center transition-colors shadow-xs shrink-0"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 2: HUMAN WHATSAPP TALKING MODE */}
-            {chatMode === 'human' && (
-              <div className="flex flex-col flex-1 overflow-y-auto p-5 space-y-4 bg-white">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-xs space-y-1.5">
-                  <div className="flex items-center gap-2 text-emerald-800 font-black">
-                    <UserCheck className="w-4 h-4 text-emerald-600" />
-                    <span>Dastak Live Human Operations Helpline</span>
+                    {/* Interactive Suggestion Chips */}
+                    {msg.suggestions && msg.suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5 max-w-[95%]">
+                        {msg.suggestions.map((sug, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSendMessage(sug)}
+                            className="text-[11px] font-bold bg-white hover:bg-pink-50 text-[#E11D74] border border-pink-200 px-2.5 py-1 rounded-xl shadow-2xs transition-all hover:border-[#E11D74]"
+                          >
+                            {sug}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <p className="text-emerald-900/80 leading-relaxed">
-                    Directly chat with our human Matli operations coordinator on WhatsApp for immediate support, order corrections, or restaurant inquiries.
-                  </p>
-                </div>
+                );
+              })}
 
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-gray-700 block mb-1">
-                      What do you need help with?
-                    </label>
-                    <select
-                      value={humanTopic}
-                      onChange={(e) => setHumanTopic(e.target.value)}
-                      className="w-full p-2.5 text-xs font-semibold bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+              {/* Typing Animation */}
+              {isTyping && (
+                <div className="flex items-center gap-2 p-3 bg-white rounded-2xl border border-pink-100 w-fit text-gray-400 shadow-sm">
+                  <Sparkles className="w-3.5 h-3.5 text-[#E11D74] animate-spin" />
+                  <span className="text-xs font-semibold text-gray-500">Matli AI Brain thinking...</span>
+                  <div className="flex items-center gap-1 pl-1">
+                    <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce" />
+                    <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <span className="w-1.5 h-1.5 bg-[#E11D74] rounded-full animate-bounce [animation-delay:0.4s]" />
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Quick Prompt Carousel if few messages */}
+            {messages.length <= 2 && (
+              <div className="p-2.5 bg-white border-t border-pink-100 shrink-0">
+                <span className="text-[10px] font-bold text-gray-400 block px-1 mb-1.5 uppercase tracking-wider">
+                  Popular in Matli right now:
+                </span>
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  {quickPrompts.map((p, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSendMessage(p.query)}
+                      className="whitespace-nowrap text-[11px] font-bold bg-pink-50 hover:bg-pink-100 text-[#E11D74] border border-pink-200 px-2.5 py-1 rounded-xl shrink-0 transition-colors"
                     >
-                      <option value="General Food Order Inquiry">General Food Order Inquiry</option>
-                      <option value="Order Status & Delivery Time">Order Status & Delivery Time</option>
-                      <option value="JazzCash / EasyPaisa Payment Help">JazzCash / EasyPaisa Payment Help</option>
-                      <option value="Register my Hotel/Restaurant in Matli">Register my Hotel/Restaurant in Matli</option>
-                      <option value="Apply for Rider Job in Matli">Apply for Rider Job in Matli</option>
-                    </select>
-                  </div>
-
-                  <div className="p-3 bg-pink-50/40 rounded-xl border border-pink-100 text-xs space-y-1 text-gray-600">
-                    <span className="font-bold text-gray-800 block">Helpline Details:</span>
-                    <p>• Dedicated Matli Phone: <strong>0301-2345678</strong></p>
-                    <p>• Response Time: <strong>Instant on WhatsApp</strong></p>
-                  </div>
-
-                  <button
-                    onClick={handleOpenHumanWhatsApp}
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-2xl shadow-md transition-all flex items-center justify-center gap-2"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    <span>Open WhatsApp Chat with Human Agent →</span>
-                  </button>
-
-                  <button
-                    onClick={() => setChatMode('agent')}
-                    className="w-full py-2 text-center text-xs font-bold text-gray-400 hover:text-gray-700"
-                  >
-                    ← Switch back to AI Brain System
-                  </button>
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
+
+            {/* Input Form & Footer */}
+            <div className="p-3 bg-white border-t border-pink-100 shrink-0 space-y-2">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  placeholder="Ask in Urdu, Sindhi, or English..."
+                  className="flex-1 text-xs p-3 bg-pink-50/40 border border-pink-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#E11D74]/30 focus:border-[#E11D74] transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputMessage.trim() || isTyping}
+                  className="w-10 h-10 rounded-2xl bg-gradient-to-r from-[#E11D74] to-[#C2185B] hover:brightness-110 disabled:opacity-40 text-white flex items-center justify-center transition-all shadow-md shrink-0 active:scale-95"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+
+              {/* Discreet Emergency WhatsApp Link */}
+              <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 px-1">
+                <span className="text-gray-400">Powered by Gemini AI</span>
+                <button
+                  type="button"
+                  onClick={handleOpenEmergencyWhatsApp}
+                  className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 hover:underline"
+                >
+                  <MessageSquare className="w-3 h-3 text-emerald-600" />
+                  <span>Human WhatsApp Helpline</span>
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

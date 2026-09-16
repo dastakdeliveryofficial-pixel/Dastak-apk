@@ -5,7 +5,7 @@ import {
   MapPin, Bike, Search, CheckCircle2, ChevronRight,
   ExternalLink, Phone, Receipt
 } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useApp, normalizePhone } from '../../context/AppContext';
 import { generateWhatsAppOrderMessage, openWhatsAppChat } from '../../utils/whatsapp';
 import { Order } from '../../types';
 
@@ -20,21 +20,36 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
   onClose,
   onTrackOrder
 }) => {
-  const { orders, currentUser, reorderPastOrder, triggerToast, t, language } = useApp();
+  const { 
+    orders, 
+    customerOrders, 
+    customerOrderCount, 
+    recordCustomerPhone,
+    currentUser, 
+    reorderPastOrder, 
+    triggerToast, 
+    t, 
+    language 
+  } = useApp();
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'delivered' | 'cancelled'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [phoneLookup, setPhoneLookup] = useState('');
+  const [showAllMatliOrders, setShowAllMatliOrders] = useState(false);
 
   if (!isOpen) return null;
 
-  // Filter orders for the current customer (matching by customerId, phone, or name)
-  const customerOrders = orders.filter(o => {
-    const isOwner = (currentUser?.id && o.customerId === currentUser.id) || 
-                    (currentUser?.phone && o.customerPhone === currentUser.phone) ||
-                    (currentUser?.name && o.customerName === currentUser.name);
-    return isOwner;
-  });
+  const handlePhoneLookup = () => {
+    if (!phoneLookup.trim()) return;
+    const clean = phoneLookup.trim();
+    recordCustomerPhone(clean);
+    setSearchQuery(clean);
+    triggerToast('Phone Linked', `Searching orders for ${clean}`, 'info');
+  };
 
-  const filteredOrders = customerOrders.filter(order => {
+  // Base pool of orders: use all orders if searching or explicitly toggled, otherwise synced customerOrders
+  const basePool = showAllMatliOrders || searchQuery.trim() ? (orders || []) : (customerOrders || []);
+
+  const filteredOrders = basePool.filter(order => {
     // Tab filter
     if (activeFilter === 'active') {
       if (order.status === 'delivered' || order.status === 'cancelled') return false;
@@ -44,13 +59,22 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
       if (order.status !== 'cancelled') return false;
     }
 
-    // Search query
+    // Search query - multi-vector matching by phone, order #, restaurant, item
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchNum = order.orderNumber.toLowerCase().includes(q);
-      const matchRest = order.restaurantName.toLowerCase().includes(q);
-      const matchItem = order.items.some(i => i.name.toLowerCase().includes(q));
-      if (!matchNum && !matchRest && !matchItem) return false;
+      const q = searchQuery.toLowerCase().trim();
+      const qNorm = normalizePhone(q);
+      const orderPhoneNorm = normalizePhone(order.customerPhone);
+
+      const matchPhone = (Boolean(qNorm) && Boolean(orderPhoneNorm) && orderPhoneNorm.includes(qNorm)) ||
+                         (Boolean(order.customerPhone) && order.customerPhone.toLowerCase().includes(q));
+      const matchNum = (order.orderNumber && order.orderNumber.toLowerCase().includes(q)) || 
+                       (order.id && order.id.toLowerCase().includes(q));
+      const matchRest = (order.restaurantName && order.restaurantName.toLowerCase().includes(q)) ||
+                        (order.restaurantNames && order.restaurantNames.some(r => r.toLowerCase().includes(q)));
+      const matchItem = order.items && order.items.some(i => i.name.toLowerCase().includes(q));
+      const matchCust = Boolean(order.customerName && order.customerName.toLowerCase().includes(q));
+
+      if (!matchPhone && !matchNum && !matchRest && !matchItem && !matchCust) return false;
     }
 
     return true;
@@ -225,20 +249,65 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
         {/* Orders List */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {filteredOrders.length === 0 ? (
-            <div className="text-center py-14">
-              <div className="w-16 h-16 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-3 border border-pink-200">
-                <ShoppingBag className="w-8 h-8 text-pink-300" />
+            <div className="py-6 sm:py-8 space-y-4">
+              {/* Interactive Phone / Order Finder Card */}
+              <div className="bg-gradient-to-br from-pink-50/90 to-rose-50/70 border border-pink-200 rounded-3xl p-4 sm:p-6 text-center space-y-3.5 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-white border border-pink-200 text-[#E11D74] flex items-center justify-center mx-auto shadow-xs">
+                  <Phone className="w-6 h-6" />
+                </div>
+                <div>
+                  <h4 className="font-black text-gray-900 text-sm sm:text-base">Find Orders by Phone or Order #</h4>
+                  <p className="text-xs text-gray-600 mt-1 max-w-sm mx-auto">
+                    Placed an order as guest or with a specific mobile number? Enter it below to display live status & history:
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 max-w-md mx-auto">
+                  <input
+                    type="text"
+                    value={phoneLookup}
+                    onChange={(e) => setPhoneLookup(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handlePhoneLookup()}
+                    placeholder="e.g. 0300-1234567 or DST-1234"
+                    className="flex-1 text-xs px-3.5 py-2.5 bg-white border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74] shadow-xs"
+                  />
+                  <button
+                    onClick={handlePhoneLookup}
+                    className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-xs transition-colors shrink-0"
+                  >
+                    Find Orders
+                  </button>
+                </div>
+                {orders && orders.length > 0 && (
+                  <div className="pt-2 border-t border-pink-200/60 flex items-center justify-center gap-3 text-xs">
+                    <button
+                      onClick={() => {
+                        setShowAllMatliOrders(!showAllMatliOrders);
+                        setSearchQuery('');
+                      }}
+                      className="font-bold text-[#E11D74] hover:underline flex items-center gap-1"
+                    >
+                      <Receipt className="w-3.5 h-3.5" />
+                      <span>{showAllMatliOrders ? '← Back to My Orders' : `View All Recent Matli Live Orders (${orders.length})`}</span>
+                    </button>
+                  </div>
+                )}
               </div>
-              <h4 className="font-bold text-gray-800 text-base">{t.noOrders}</h4>
-              <p className="text-xs text-gray-400 mt-1 max-w-xs mx-auto">
-                {searchQuery ? 'No orders match your search criteria.' : 'Your placed orders in Matli will appear here with live tracking & receipts.'}
-              </p>
-              <button
-                onClick={onClose}
-                className="mt-4 bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors"
-              >
-                {t.exploreRestaurants}
-              </button>
+
+              <div className="text-center py-4">
+                <div className="w-12 h-12 rounded-full bg-pink-50 flex items-center justify-center mx-auto mb-2 border border-pink-200">
+                  <ShoppingBag className="w-6 h-6 text-pink-300" />
+                </div>
+                <h4 className="font-bold text-gray-800 text-sm">{t.noOrders}</h4>
+                <p className="text-xs text-gray-400 mt-0.5 max-w-xs mx-auto">
+                  {searchQuery ? 'No orders match your search criteria.' : 'Your placed orders in Matli will appear here with live tracking & receipts.'}
+                </p>
+                <button
+                  onClick={onClose}
+                  className="mt-3 bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow-xs transition-colors"
+                >
+                  {t.exploreRestaurants}
+                </button>
+              </div>
             </div>
           ) : (
             filteredOrders.map((order) => {

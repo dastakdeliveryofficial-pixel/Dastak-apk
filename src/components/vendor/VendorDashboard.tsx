@@ -9,6 +9,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem, Order, OrderStatus } from '../../types';
 import { openWhatsAppChat } from '../../utils/whatsapp';
+import { ITEM_CATEGORY_OPTIONS, getCategoryLabel } from '../../data/categoryCatalog';
 
 export const VendorDashboard: React.FC = () => {
   const { 
@@ -46,6 +47,7 @@ export const VendorDashboard: React.FC = () => {
   const [itemPrepTime, setItemPrepTime] = useState('15 min');
   const [itemIsCombo, setItemIsCombo] = useState(false);
   const [itemComboItemsStr, setItemComboItemsStr] = useState('');
+  const [itemIsAvailable, setItemIsAvailable] = useState(true);
 
   // Sample image suggestions for quick upload/selection
   const sampleImages = [
@@ -96,6 +98,7 @@ export const VendorDashboard: React.FC = () => {
     setItemPrepTime('15 min');
     setItemIsCombo(false);
     setItemComboItemsStr('');
+    setItemIsAvailable(true);
     setIsItemModalOpen(true);
   };
 
@@ -111,6 +114,7 @@ export const VendorDashboard: React.FC = () => {
     setItemPrepTime(item.preparationTime || '15 min');
     setItemIsCombo(!!item.isCombo);
     setItemComboItemsStr(item.comboItems ? item.comboItems.join(', ') : '');
+    setItemIsAvailable(item.isAvailable !== false);
     setIsItemModalOpen(true);
   };
 
@@ -131,7 +135,7 @@ export const VendorDashboard: React.FC = () => {
       discountedPrice: itemDiscountedPrice ? Number(itemDiscountedPrice) : undefined,
       description: itemDescription.trim() || 'Freshly prepared delicious item in Matli.',
       image: itemImage.trim() || sampleImages[0].url,
-      isAvailable: editingItem ? editingItem.isAvailable : true,
+      isAvailable: itemIsAvailable,
       preparationTime: itemPrepTime,
       isCombo: itemIsCombo,
       comboItems: comboItems
@@ -624,7 +628,7 @@ export const VendorDashboard: React.FC = () => {
                       />
                       <div className="absolute top-2 left-2 flex gap-1">
                         <span className="text-[9px] font-bold bg-black/60 backdrop-blur-xs text-white px-1.5 py-0.5 rounded uppercase">
-                          {item.category}
+                          {getCategoryLabel(item.category)}
                         </span>
                         {item.isCombo && (
                           <span className="text-[9px] font-bold bg-rose-600 text-white px-1.5 py-0.5 rounded">
@@ -962,18 +966,22 @@ export const VendorDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Category</label>
+                  <label className="font-bold text-gray-700 block mb-1 flex items-center justify-between">
+                    <span>Category</span>
+                    <span className="text-[10px] text-[#FF6B00] font-semibold truncate max-w-[100px]">
+                      {getCategoryLabel(itemCategory)}
+                    </span>
+                  </label>
                   <select
                     value={itemCategory}
                     onChange={(e) => setItemCategory(e.target.value)}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold text-xs text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
                   >
-                    <option value="biryani">Biryani & Pulao</option>
-                    <option value="fastfood">Fast Food & Burgers</option>
-                    <option value="bbq">BBQ & Karahi</option>
-                    <option value="desserts">Sweets & Desserts</option>
-                    <option value="drinks">Chai & Drinks</option>
-                    <option value="deals">Super Combo Deals</option>
+                    {ITEM_CATEGORY_OPTIONS.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.emoji} {cat.label} ({cat.urdu})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -985,7 +993,7 @@ export const VendorDashboard: React.FC = () => {
                     min={10}
                     value={itemPrice}
                     onChange={(e) => setItemPrice(Number(e.target.value))}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold text-xs"
                   />
                 </div>
               </div>
@@ -1069,6 +1077,28 @@ export const VendorDashboard: React.FC = () => {
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Stock Availability Toggle */}
+              <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200 flex items-center justify-between">
+                <div>
+                  <span className="font-bold text-gray-900 block text-xs">Stock / Availability</span>
+                  <span className="text-[10px] text-gray-500">
+                    {itemIsAvailable ? '✅ Live & Orderable by customers' : '❌ Marked as Out of Stock / Sold Out'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setItemIsAvailable(!itemIsAvailable)}
+                  className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all ${
+                    itemIsAvailable
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                  <span>{itemIsAvailable ? 'In Stock' : 'Sold Out'}</span>
+                </button>
               </div>
 
               <div className="pt-2">

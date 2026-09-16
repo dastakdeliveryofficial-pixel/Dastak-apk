@@ -36,12 +36,12 @@ export const CustomerNavDrawer: React.FC<CustomerNavDrawerProps> = ({
     platformSettings,
     isSoundEnabled,
     setIsSoundEnabled,
-    orders
+    orders,
+    customerOrderCount,
+    openAIBrain
   } = useApp();
 
-  const customerOrdersCount = (orders || []).filter(
-    o => o.customerId === currentUser?.id || (currentUser?.phone && o.customerPhone === currentUser?.phone)
-  ).length;
+  const customerOrdersCount = customerOrderCount;
 
   return (
     <AnimatePresence>
@@ -239,16 +239,17 @@ export const CustomerNavDrawer: React.FC<CustomerNavDrawerProps> = ({
                   type="button"
                   onClick={() => {
                     onClose();
-                    const msg = `Salam Dastak Delivery Matli! I need help with an order or inquiry.`;
-                    openWhatsAppChat(platformSettings.supportWhatsApp, msg);
+                    openAIBrain();
                   }}
-                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-teal-50/60 hover:bg-teal-50 text-teal-800 transition-colors text-xs font-bold border border-teal-200/70"
+                  className="w-full flex items-center justify-between p-3 rounded-2xl bg-gradient-to-r from-pink-50 to-rose-50 hover:from-pink-100 hover:to-rose-100 text-[#E11D74] transition-colors text-xs font-bold border border-pink-200 shadow-xs"
                 >
                   <div className="flex items-center gap-3">
-                    <MessageCircle className="w-4 h-4 text-teal-600" />
-                    <span>Matli WhatsApp Support</span>
+                    <Sparkles className="w-4 h-4 text-[#E11D74] animate-spin" style={{ animationDuration: '8s' }} />
+                    <span>Dastak AI Brain Assistant</span>
                   </div>
-                  <span className="text-[10px] font-bold text-teal-600">Active</span>
+                  <span className="text-[10px] bg-[#E11D74] text-white px-2 py-0.5 rounded-full font-black">
+                    24/7 AI
+                  </span>
                 </button>
               </div>
 

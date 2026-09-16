@@ -15,6 +15,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { VendorDashboard } from './components/vendor/VendorDashboard';
 import { RiderApp } from './components/rider/RiderApp';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { FloatingSupportWidget } from './components/common/FloatingSupportWidget';
 import { Restaurant } from './types';
 import { MessageCircle, Smartphone, ShieldAlert } from 'lucide-react';
 import { openWhatsAppChat } from './utils/whatsapp';
@@ -207,22 +208,11 @@ const MainAppContent: React.FC = () => {
       {/* Authentication & Role ID Login Modal */}
       <AuthModal />
 
-      {/* WhatsApp Quick Support Floating Action Button */}
-      <div className="fixed bottom-5 right-5 z-40">
-        <button
-          onClick={() => {
-            const msg = `Salam Dastak Delivery Matli! I need help with an order or inquiry.`;
-            openWhatsAppChat(platformSettings.supportWhatsApp, msg);
-          }}
-          className="bg-gradient-to-r from-[#E11D74] to-[#D81B60] hover:from-[#C2185B] hover:to-[#AD1457] text-white p-3 rounded-full shadow-lg shadow-pink-200 transition-all flex items-center gap-2 group hover:scale-105 border border-white/20"
-          title="Chat with Matli Support on WhatsApp"
-        >
-          <MessageCircle className="w-5 h-5" />
-          <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 ease-in-out whitespace-nowrap text-xs font-bold pl-0 group-hover:pl-1">
-            Matli Support
-          </span>
-        </button>
-      </div>
+      {/* Dastak AI Brain Assistant (Powered by Gemini AI) */}
+      <FloatingSupportWidget
+        onSelectRestaurant={handleOpenRestaurant}
+        onTrackOrder={(orderId) => setActiveTrackingOrderId(orderId)}
+      />
 
       {/* Omni-Role Notification Center Drawer */}
       <OmniNotificationCenter

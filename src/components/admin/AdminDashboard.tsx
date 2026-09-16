@@ -12,6 +12,7 @@ import { useApp } from '../../context/AppContext';
 import { Restaurant, Rider, PromoCode, OrderStatus, MenuItem } from '../../types';
 import { MATLI_AREAS } from '../../data/mockData';
 import { generateRestaurantOrderDispatchSlip, openWhatsAppChat } from '../../utils/whatsapp';
+import { ITEM_CATEGORY_OPTIONS, getCategoryLabel } from '../../data/categoryCatalog';
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -131,8 +132,14 @@ export const AdminDashboard: React.FC = () => {
     if (!editingProduct) return;
     adminUpdateProduct(editingProduct.id, {
       name: editingProduct.name,
+      nameSindhi: editingProduct.nameSindhi,
+      nameUrdu: editingProduct.nameUrdu,
+      category: editingProduct.category,
       price: Number(editingProduct.price),
+      discountedPrice: editingProduct.discountedPrice ? Number(editingProduct.discountedPrice) : undefined,
       description: editingProduct.description,
+      image: editingProduct.image,
+      restaurantId: editingProduct.restaurantId,
       isAvailable: editingProduct.isAvailable
     });
     setEditingProduct(null);
@@ -669,8 +676,10 @@ export const AdminDashboard: React.FC = () => {
                           onChange={(e) => setProductFormCategory(e.target.value)}
                           className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-semibold focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
                         >
-                          {categories.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
+                          {ITEM_CATEGORY_OPTIONS.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.emoji} {c.label} ({c.urdu})
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -732,17 +741,27 @@ export const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredMenuItems.map((item) => {
                 const rest = restaurants.find(r => r.id === item.restaurantId);
+                const isInStock = item.isAvailable !== false;
                 return (
                   <div
                     key={item.id}
-                    className="bg-white rounded-3xl p-4 border border-pink-100 shadow-xs flex flex-col justify-between gap-3 hover:border-pink-300 transition-all"
+                    className={`bg-white rounded-3xl p-4 border shadow-xs flex flex-col justify-between gap-3 transition-all ${
+                      isInStock ? 'border-pink-100 hover:border-pink-300' : 'border-gray-200 bg-gray-50/70 opacity-80'
+                    }`}
                   >
                     <div className="flex items-start gap-3">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-16 h-16 rounded-2xl object-cover border border-pink-100 shrink-0"
-                      />
+                      <div className="relative shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-16 h-16 rounded-2xl object-cover border border-pink-100 shrink-0"
+                        />
+                        {!isInStock && (
+                          <span className="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center text-[9px] font-bold text-white uppercase">
+                            Out of Stock
+                          </span>
+                        )}
+                      </div>
                       <div className="min-w-0 flex-1">
                         <span className="text-[10px] font-bold text-[#E11D74] uppercase tracking-wider block truncate">
                           {rest?.name || 'Restaurant'}
@@ -755,7 +774,28 @@ export const AdminDashboard: React.FC = () => {
                             {item.name_sd}
                           </span>
                         )}
-                        <p className="text-xs text-gray-400 line-clamp-2 mt-0.5">
+
+                        {/* Category & Stock Badges */}
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-50 text-[#E11D74] border border-pink-100">
+                            {getCategoryLabel(item.category)}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => adminUpdateProduct(item.id, { isAvailable: !isInStock })}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors flex items-center gap-1 ${
+                              isInStock
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                            }`}
+                            title="Toggle in-stock / out-of-stock"
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${isInStock ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                            <span>{isInStock ? 'In Stock' : 'Out of Stock'}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-gray-400 line-clamp-2 mt-1">
                           {item.description}
                         </p>
                       </div>
@@ -765,13 +805,16 @@ export const AdminDashboard: React.FC = () => {
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-gray-400 font-semibold">Rate:</span>
                         <span className="text-sm font-black text-gray-900">₨ {item.price}</span>
+                        {item.discountedPrice && (
+                          <span className="text-xs text-gray-400 line-through">₨ {item.discountedPrice}</span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => setEditingProduct(item)}
                           className="p-1.5 text-gray-600 hover:text-[#E11D74] hover:bg-pink-50 rounded-xl transition-colors"
-                          title="Edit Rate & Product Details"
+                          title="Edit Category, Rate & Stock Details"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -795,44 +838,164 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Edit Product Modal */}
+        {/* Edit Product Modal with Category & Stock controls */}
         {editingProduct && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs overflow-y-auto">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              className="bg-white rounded-3xl max-w-md w-full p-5 border border-pink-200 shadow-2xl space-y-4"
+              className="bg-white rounded-3xl max-w-lg w-full p-5 border border-pink-200 shadow-2xl space-y-4 my-8 max-h-[90vh] flex flex-col"
             >
-              <div className="flex items-center justify-between pb-2 border-b border-pink-100">
-                <h3 className="font-bold text-sm text-gray-900">
-                  Edit Product & Change Rate
-                </h3>
-                <button onClick={() => setEditingProduct(null)}>
-                  <X className="w-4 h-4 text-gray-400" />
+              <div className="flex items-center justify-between pb-2 border-b border-pink-100 shrink-0">
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Edit className="w-4 h-4 text-[#E11D74]" />
+                    <span>Edit Product, Category & Stock</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400">Update rates, category assignment, and stock status</p>
+                </div>
+                <button 
+                  onClick={() => setEditingProduct(null)}
+                  className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500"
+                >
+                  <X className="w-4 h-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveProductEdit} className="space-y-3 text-xs">
+              <form onSubmit={handleSaveProductEdit} className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+                {/* Product Title */}
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Product Title</label>
+                  <label className="font-bold text-gray-700 block mb-1">Product Title (English)</label>
                   <input
                     type="text"
+                    required
                     value={editingProduct.name}
                     onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
-                    className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74] font-medium"
                   />
                 </div>
 
+                {/* CATEGORY SELECTOR - PROMINENT AND CATEGORIZED */}
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Price / Rate (₨ PKR)</label>
-                  <input
-                    type="number"
-                    value={editingProduct.price}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
-                    className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
-                  />
+                  <label className="font-bold text-gray-700 block mb-1 flex items-center justify-between">
+                    <span>Category (قسم / ڪيٽيگري)</span>
+                    <span className="text-[10px] text-[#E11D74] font-semibold">
+                      Current: {getCategoryLabel(editingProduct.category)}
+                    </span>
+                  </label>
+                  <select
+                    value={editingProduct.category}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                    className="w-full p-2.5 bg-pink-50/50 border-2 border-pink-300 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#E11D74]"
+                  >
+                    {ITEM_CATEGORY_OPTIONS.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.emoji} {cat.label} — ({cat.urdu})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
+                {/* Target Restaurant */}
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Assigned Restaurant / Vendor</label>
+                  <select
+                    value={editingProduct.restaurantId}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, restaurantId: e.target.value })}
+                    className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-medium text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                  >
+                    {restaurants.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name} ({r.area})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Price & Discounted Price */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Price / Rate (₨ PKR)</label>
+                    <input
+                      type="number"
+                      required
+                      min={10}
+                      value={editingProduct.price}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-bold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Promo / Strike Price (₨ PKR)</label>
+                    <input
+                      type="number"
+                      value={editingProduct.discountedPrice || ''}
+                      onChange={(e) => setEditingProduct({ 
+                        ...editingProduct, 
+                        discountedPrice: e.target.value ? Number(e.target.value) : undefined 
+                      })}
+                      placeholder="Optional"
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    />
+                  </div>
+                </div>
+
+                {/* Sindhi & Urdu Titles */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Sindhi Name (سنڌي)</label>
+                    <input
+                      type="text"
+                      value={editingProduct.nameSindhi || (editingProduct as any).name_sd || ''}
+                      onChange={(e) => setEditingProduct({ 
+                        ...editingProduct, 
+                        nameSindhi: e.target.value,
+                        name_sd: e.target.value 
+                      } as any)}
+                      placeholder="سنڌي ۾ نالو"
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Urdu Name (اردو)</label>
+                    <input
+                      type="text"
+                      value={editingProduct.nameUrdu || (editingProduct as any).name_ur || ''}
+                      onChange={(e) => setEditingProduct({ 
+                        ...editingProduct, 
+                        nameUrdu: e.target.value,
+                        name_ur: e.target.value 
+                      } as any)}
+                      placeholder="اردو میں نام"
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    />
+                  </div>
+                </div>
+
+                {/* Image URL */}
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Product Photo URL</label>
+                  <div className="flex items-center gap-2">
+                    <img 
+                      src={editingProduct.image} 
+                      alt="Thumbnail preview" 
+                      className="w-9 h-9 rounded-xl object-cover border border-pink-200 shrink-0" 
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80';
+                      }}
+                    />
+                    <input
+                      type="url"
+                      value={editingProduct.image}
+                      onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                    />
+                  </div>
+                </div>
+
+                {/* Description */}
                 <div>
                   <label className="font-bold text-gray-700 block mb-1">Description</label>
                   <textarea
@@ -843,22 +1006,48 @@ export const AdminDashboard: React.FC = () => {
                   />
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingProduct.isAvailable}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, isAvailable: e.target.checked })}
-                      className="rounded text-[#E11D74] focus:ring-[#E11D74]"
-                    />
-                    <span className="font-bold text-gray-700">Available in stock</span>
-                  </label>
+                {/* STOCK AVAILABILITY CONTROLS */}
+                <div className="p-3.5 bg-pink-50/50 rounded-2xl border border-pink-200 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-gray-900 block text-xs">Stock Status (اسٹاک کی دستیابی)</span>
+                    <span className="text-[10px] text-gray-500">
+                      {editingProduct.isAvailable !== false
+                        ? '✅ In Stock: Visible and orderable by customers'
+                        : '❌ Out of Stock: Marked unavailable in Matli catalog'}
+                    </span>
+                  </div>
 
                   <button
-                    type="submit"
-                    className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold px-4 py-2 rounded-xl shadow-xs transition-colors"
+                    type="button"
+                    onClick={() => setEditingProduct({ 
+                      ...editingProduct, 
+                      isAvailable: editingProduct.isAvailable === false ? true : false 
+                    })}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer ${
+                      editingProduct.isAvailable !== false
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                        : 'bg-rose-600 hover:bg-rose-700 text-white shadow-xs'
+                    }`}
                   >
-                    Save Changes
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                    <span>{editingProduct.isAvailable !== false ? 'In Stock' : 'Out of Stock'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-pink-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProduct(null)}
+                    className="px-4 py-2 border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold px-5 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Save Changes</span>
                   </button>
                 </div>
               </form>

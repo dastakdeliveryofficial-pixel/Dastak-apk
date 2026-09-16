@@ -169,3 +169,45 @@ export const TWELVE_DISPLAY_CATEGORIES: DisplayCategory[] = [
     basePrice: 100
   }
 ];
+
+export interface ItemCategoryOption {
+  id: string;
+  label: string;
+  group: string;
+  emoji: string;
+  urdu: string;
+}
+
+export const ITEM_CATEGORY_OPTIONS: ItemCategoryOption[] = [
+  // Food & Dining
+  { id: 'biryani', label: 'Biryani & Pulao', group: 'Food & Dining', emoji: '🍲', urdu: 'بریانی اور پلاؤ' },
+  { id: 'fastfood', label: 'Fast Food & Burgers', group: 'Food & Dining', emoji: '🍔', urdu: 'فاسٹ فوڈ اور برگر' },
+  { id: 'pizza', label: 'Pizza & Fast Food', group: 'Food & Dining', emoji: '🍕', urdu: 'پیزا اور فاسٹ فوڈ' },
+  { id: 'bbq', label: 'BBQ & Karahi', group: 'Food & Dining', emoji: '🍢', urdu: 'باربی کیو اور کڑاہی' },
+  { id: 'drinks', label: 'Chai, Shakes & Drinks', group: 'Food & Dining', emoji: '☕', urdu: 'چائے، لسی اور مشروبات' },
+  { id: 'desserts', label: 'Sweets & Desserts', group: 'Food & Dining', emoji: '🍰', urdu: 'مٹھائی اور حلوہ جات' },
+  { id: 'deals', label: 'Super Combo Deals', group: 'Food & Dining', emoji: '🏷️', urdu: 'سپیشل کمبو ڈیلز' },
+
+  // Daily Essentials & Retail
+  { id: 'grocery', label: 'Grocery & Ration', group: 'Daily Essentials & Retail', emoji: '🧺', urdu: 'گروسری اور راشن' },
+  { id: 'pharmacy', label: 'Medicines & Health', group: 'Daily Essentials & Retail', emoji: '💊', urdu: 'ادویات اور فارمیسی' },
+  { id: 'fruits_veg', label: 'Fruits & Vegetables', group: 'Daily Essentials & Retail', emoji: '🥦', urdu: 'تازہ پھل اور سبزیاں' },
+  { id: 'meat', label: 'Fresh Halal Meat', group: 'Daily Essentials & Retail', emoji: '🥩', urdu: 'تازہ گوشت (چکن، مٹن، بیف)' },
+  { id: 'dairy', label: 'Milk, Dahi & Dairy', group: 'Daily Essentials & Retail', emoji: '🥛', urdu: 'دودھ، دہی اور مکھن' },
+  { id: 'hp_jp', label: 'HP / JP Mobile & Tech', group: 'Daily Essentials & Retail', emoji: '💻', urdu: 'موبائل و کمپیوٹر اسیسریز' },
+
+  // Express Delivery Services
+  { id: 'parcels', label: 'Parcels & Courier', group: 'Delivery Services', emoji: '📦', urdu: 'پارسل اور کوریئر' },
+  { id: 'pick_drop', label: 'Pick & Drop Service', group: 'Delivery Services', emoji: '🛵', urdu: 'پک اینڈ ڈراپ' },
+  { id: 'printing', label: 'Printing & Copies', group: 'Delivery Services', emoji: '🖨️', urdu: 'فوٹو کاپی اور پرنٹنگ' },
+  { id: 'petrol', label: 'Emergency Petrol', group: 'Delivery Services', emoji: '⛽', urdu: 'ایمرجنسی پیٹرول' },
+  { id: 'medical_services', label: 'Medical & Clinic Tokens', group: 'Delivery Services', emoji: '🩺', urdu: 'طبی سہولیات' }
+];
+
+export function getCategoryLabel(categoryId: string): string {
+  const found = ITEM_CATEGORY_OPTIONS.find(c => c.id.toLowerCase() === categoryId?.toLowerCase());
+  if (found) return `${found.emoji} ${found.label}`;
+  const displayCat = TWELVE_DISPLAY_CATEGORIES.find(c => c.id.toLowerCase() === categoryId?.toLowerCase());
+  if (displayCat) return `${displayCat.iconEmoji} ${displayCat.name}`;
+  return categoryId ? categoryId.charAt(0).toUpperCase() + categoryId.slice(1) : 'General';
+}

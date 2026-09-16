@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShoppingBag, MapPin, ChevronDown, User, Clock, Globe, Check,
   LogIn, LogOut, KeyRound, ShieldAlert, Store, Bike,
-  Smartphone, Download, ShieldCheck, Bell
+  Smartphone, Download, ShieldCheck, Bell, Sparkles
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole, Language } from '../../types';
@@ -46,7 +46,9 @@ export const Header: React.FC<HeaderProps> = ({
     unreadNotificationCount,
     openNotificationCenter,
     openApkModal,
-    customerOrderCount
+    customerOrderCount,
+    activeCustomerOrder,
+    openAIBrain
   } = useApp();
 
   const [isLocationMenuOpen, setIsLocationMenuOpen] = useState(false);
@@ -55,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [selectedArea, setSelectedArea] = useState('Shahi Bazaar, Matli');
 
   // Check active order for current customer
-  const activeOrder = (orders || []).find(
+  const activeOrder = activeCustomerOrder || (orders || []).find(
     o => o.customerId === currentUser?.id && o.status !== 'delivered' && o.status !== 'cancelled'
   ) || (orders || []).find(o => o.id === trackingOrderId);
 
@@ -227,6 +229,17 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </button>
           )}
+
+          {/* Dastak AI Brain Trigger */}
+          <button
+            onClick={openAIBrain}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-pink-500 via-rose-500 to-pink-600 hover:brightness-110 text-white text-xs font-black shadow-xs transition-transform active:scale-95 border border-white/20"
+            title="Open Dastak AI Brain Food & Delivery Assistant"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-spin" style={{ animationDuration: '8s' }} />
+            <span className="hidden sm:inline">AI Brain</span>
+            <span className="sm:hidden text-[11px]">AI</span>
+          </button>
 
           {/* Download APK / Android App Button */}
           <button

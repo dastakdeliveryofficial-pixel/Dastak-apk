@@ -42,7 +42,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     getRestaurantName,
     getItemName,
     customerOrderCount,
-    language
+    language,
+    recordDevicePlacedOrder,
+    recordCustomerPhone
   } = useApp();
 
   const [promoInput, setPromoInput] = useState('');
@@ -113,9 +115,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
     try {
       const order = await placeOrder(addr, paymentMethod);
-      onClose();
       if (order && order.id) {
+        recordDevicePlacedOrder(order.id, order.orderNumber, addr.phone);
+        if (addr.phone) recordCustomerPhone(addr.phone);
+        onClose();
         onOrderPlaced(order.id);
+      } else {
+        onClose();
       }
     } catch (e) {
       console.error('Error placing order:', e);
@@ -129,6 +135,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     try {
       // First place order locally to register state
       const order = await placeOrder(addr, paymentMethod);
+      if (order && order.id) {
+        recordDevicePlacedOrder(order.id, order.orderNumber, addr.phone);
+        if (addr.phone) recordCustomerPhone(addr.phone);
+      }
       
       // Generate WhatsApp bill message
       const message = generateWhatsAppOrderMessage(order, 'vendor');

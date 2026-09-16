@@ -160,7 +160,10 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     platformSettings,
     unreadNotificationCount,
     openNotificationCenter,
-    openApkModal
+    openApkModal,
+    activeCustomerOrder,
+    customerOrders,
+    customerOrderCount
   } = useApp();
 
   const [activeFilter, setActiveFilter] = useState<'all' | 'top_rated' | 'low_fee' | 'deals'>('all');
@@ -198,8 +201,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     return (bannerPromos || []).filter(p => p.active !== false);
   }, [bannerPromos]);
 
-  // Check active order for current customer
-  const activeOrder = orders.find(
+  // Synced active order for current customer across all sessions and device history
+  const activeOrder = activeCustomerOrder || orders.find(
     o => (o.customerId === currentUser?.id || (currentUser?.phone && o.customerPhone === currentUser?.phone)) &&
          o.status !== 'delivered' && o.status !== 'cancelled'
   );
@@ -589,11 +592,11 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
         {activeBanners.length > 0 && (
           <div className="space-y-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {activeBanners.map((promo) => {
+              {activeBanners.map((promo, pIdx) => {
                 const localized = getPromoContent(promo);
                 return (
                   <div
-                    key={promo.id}
+                    key={promo.id || `promo-banner-${pIdx}`}
                     className={`relative overflow-hidden rounded-3xl p-4 bg-gradient-to-r ${promo.bgGradient || 'from-pink-600 to-rose-700'} text-white shadow-sm flex items-center justify-between gap-3 border border-white/20`}
                   >
                     <div className="relative z-10 max-w-[70%]">
@@ -732,7 +735,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             ) : (
               <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-5">
-                  {matchingProducts.slice(0, visibleProductCount).map((item) => {
+                  {matchingProducts.slice(0, visibleProductCount).map((item, itemIdx) => {
                     const rest = restaurants.find(r => r.id === item.restaurantId);
                     const itemName = getItemName(item);
                     const itemDesc = getItemDesc(item);
@@ -744,7 +747,7 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
 
                     return (
                       <div
-                        key={item.id}
+                        key={`${item.id}-${item.restaurantId || ''}-${itemIdx}`}
                         className="bg-white rounded-2xl border border-pink-100 shadow-2xs hover:shadow-md transition-all p-3.5 flex flex-col justify-between gap-3 group"
                       >
                         <div className="flex gap-3">
@@ -798,11 +801,11 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
                         {/* Variation Options (if any) */}
                         {item.variationTypes && item.variationTypes.length > 0 && (
                           <div className="flex flex-wrap gap-1 pt-1 border-t border-pink-50">
-                            {item.variationTypes[0].options.map(opt => {
-                              const isSelected = activeVariation?.id === opt.id;
+                            {item.variationTypes[0].options.map((opt, optIdx) => {
+                              const isSelected = activeVariation?.name === opt.name || (Boolean(opt.id) && activeVariation?.id === opt.id);
                               return (
                                 <button
-                                  key={opt.id}
+                                  key={opt.id ? `${item.id}-${opt.id}` : `${item.id}-opt-${opt.name}-${optIdx}`}
                                   type="button"
                                   onClick={() => setSelectedVariations({ ...selectedVariations, [item.id]: opt })}
                                   className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
@@ -931,14 +934,14 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {filteredRestaurants.map((rest) => {
+            {filteredRestaurants.map((rest, restIdx) => {
               const isFav = favorites.includes(rest.id);
               const restName = getRestaurantName(rest);
               const restDesc = getRestaurantDesc(rest);
 
               return (
                 <div
-                  key={rest.id}
+                  key={rest.id || `rest-${restIdx}`}
                   onClick={() => onSelectRestaurant(rest)}
                   className="bg-white rounded-3xl border border-pink-100 overflow-hidden shadow-2xs hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
                 >
@@ -1117,9 +1120,13 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
           >
             <ClipboardList className="w-5 h-5" />
             <span className="text-[10px] font-medium">Orders</span>
-            {activeOrder && (
+            {activeOrder ? (
               <span className="absolute -top-1 right-2 w-2 h-2 rounded-full bg-[#E11D74] animate-ping" />
-            )}
+            ) : customerOrderCount > 0 ? (
+              <span className="absolute -top-1.5 right-1.5 bg-[#E11D74] text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
+                {customerOrderCount}
+              </span>
+            ) : null}
           </button>
 
           {/* Favorites Tab */}
