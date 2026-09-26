@@ -13,6 +13,7 @@ import { Restaurant, Rider, PromoCode, OrderStatus, MenuItem } from '../../types
 import { MATLI_AREAS } from '../../data/mockData';
 import { generateRestaurantOrderDispatchSlip, openWhatsAppChat } from '../../utils/whatsapp';
 import { ITEM_CATEGORY_OPTIONS, getCategoryLabel } from '../../data/categoryCatalog';
+import { ImageUploader } from '../common/ImageUploader';
 
 export const AdminDashboard: React.FC = () => {
   const { 
@@ -83,6 +84,33 @@ export const AdminDashboard: React.FC = () => {
   // Edit product modal state
   const [editingProduct, setEditingProduct] = useState<MenuItem | null>(null);
 
+  // Edit restaurant modal state
+  const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(null);
+
+  const handleSaveRestaurantEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRestaurant) return;
+    try {
+      await updateRestaurantDetails(editingRestaurant.id, {
+        name: editingRestaurant.name,
+        nameUrdu: editingRestaurant.nameUrdu,
+        phone: editingRestaurant.phone,
+        whatsappNumber: editingRestaurant.whatsappNumber,
+        deliveryFee: Number(editingRestaurant.deliveryFee),
+        deliveryTime: editingRestaurant.deliveryTime,
+        address: editingRestaurant.address,
+        area: editingRestaurant.area,
+        image: editingRestaurant.image,
+        isOpen: editingRestaurant.isOpen,
+        commissionRate: 0
+      });
+      triggerToast('Restaurant Updated', `${editingRestaurant.name} saved successfully`, 'success');
+      setEditingRestaurant(null);
+    } catch {
+      triggerToast('Error', 'Failed to update restaurant details', 'error');
+    }
+  };
+
   // Promo code form state
   const [newPromoCode, setNewPromoCode] = useState('');
   const [newPromoValue, setNewPromoValue] = useState(20);
@@ -111,8 +139,8 @@ export const AdminDashboard: React.FC = () => {
     adminAddNewProduct({
       restaurantId: productFormRestId,
       name: productFormName.trim(),
-      name_sd: productFormNameSd.trim() || undefined,
-      name_ur: productFormNameUr.trim() || undefined,
+      nameSindhi: productFormNameSd.trim() || undefined,
+      nameUrdu: productFormNameUr.trim() || undefined,
       description: productFormDesc.trim() || 'Delicious fresh food prepared in Matli',
       price: Number(productFormPrice),
       category: productFormCategory,
@@ -324,10 +352,10 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="bg-white p-4 rounded-2xl border border-pink-100 shadow-xs">
             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Platform Commission</span>
-            <span className="text-xl sm:text-2xl font-black text-[#E11D74] mt-1 block">
-              ₨ {platformEarnings.toLocaleString()}
+            <span className="text-xl sm:text-2xl font-black text-emerald-600 mt-1 block">
+              0% (Free)
             </span>
-            <span className="text-[10px] text-gray-400">~10% Matli service fee</span>
+            <span className="text-[10px] text-emerald-700 font-bold">100% Payout to Matli Vendors</span>
           </div>
 
           <div className="bg-white p-4 rounded-2xl border border-pink-100 shadow-xs">
@@ -445,6 +473,13 @@ export const AdminDashboard: React.FC = () => {
                   Confirm incoming customer orders and instantly forward kitchen slips to hotel WhatsApp numbers.
                 </p>
               </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Live Sync Active ({orders.length} orders)
+                </span>
+              </div>
             </div>
 
             <div className="bg-white rounded-3xl border border-pink-100 shadow-sm overflow-hidden">
@@ -462,7 +497,15 @@ export const AdminDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-pink-50">
-                    {orders.map((order) => (
+                    {orders.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-gray-500">
+                          <ShoppingBag className="w-8 h-8 text-pink-300 mx-auto mb-2" />
+                          <p className="font-bold text-gray-800 text-sm">No customer orders placed yet</p>
+                          <p className="text-xs text-gray-400 mt-1">Orders placed by customers in the app will appear here instantly.</p>
+                        </td>
+                      </tr>
+                    ) : orders.map((order) => (
                       <tr key={order.id} className="hover:bg-pink-50/30 transition-colors">
                         <td className="p-3.5 font-bold text-gray-900">
                           #{order.orderNumber}
@@ -695,13 +738,11 @@ export const AdminDashboard: React.FC = () => {
                         />
                       </div>
 
-                      <div>
-                        <label className="font-bold text-gray-700 block mb-1">Image URL</label>
-                        <input
-                          type="url"
+                      <div className="sm:col-span-2 p-2 bg-white rounded-2xl border border-pink-100">
+                        <ImageUploader
                           value={productFormImage}
-                          onChange={(e) => setProductFormImage(e.target.value)}
-                          className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                          onChange={setProductFormImage}
+                          label="Product Image (Camera / File Upload)"
                         />
                       </div>
                     </div>
@@ -974,25 +1015,13 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Image URL */}
-                <div>
-                  <label className="font-bold text-gray-700 block mb-1">Product Photo URL</label>
-                  <div className="flex items-center gap-2">
-                    <img 
-                      src={editingProduct.image} 
-                      alt="Thumbnail preview" 
-                      className="w-9 h-9 rounded-xl object-cover border border-pink-200 shrink-0" 
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=500&auto=format&fit=crop&q=80';
-                      }}
-                    />
-                    <input
-                      type="url"
-                      value={editingProduct.image}
-                      onChange={(e) => setEditingProduct({ ...editingProduct, image: e.target.value })}
-                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
-                    />
-                  </div>
+                {/* Image Upload */}
+                <div className="p-3 bg-pink-50/30 rounded-2xl border border-pink-100">
+                  <ImageUploader
+                    value={editingProduct.image}
+                    onChange={(url) => setEditingProduct({ ...editingProduct, image: url })}
+                    label="Product Photo"
+                  />
                 </div>
 
                 {/* Description */}
@@ -1048,6 +1077,162 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <Check className="w-4 h-4" />
                     <span>Save Changes</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Edit Restaurant Modal */}
+        {editingRestaurant && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-pink-100 max-h-[90vh] flex flex-col space-y-4"
+            >
+              <div className="flex items-center justify-between pb-2 border-b border-pink-100">
+                <div className="flex items-center gap-2 text-gray-900 font-black text-sm sm:text-base">
+                  <Store className="w-5 h-5 text-[#E11D74]" />
+                  <span>Edit Restaurant / Mart Details</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingRestaurant(null)}
+                  className="w-8 h-8 rounded-full bg-pink-50 hover:bg-pink-100 text-gray-500 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveRestaurantEdit} className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+                {/* Storefront Image */}
+                <div className="p-3 bg-pink-50/40 rounded-2xl border border-pink-100">
+                  <ImageUploader
+                    value={editingRestaurant.image}
+                    onChange={(url) => setEditingRestaurant({ ...editingRestaurant, image: url })}
+                    label="Storefront / Hotel Photo"
+                    aspectRatio="wide"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Restaurant Name (English)</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingRestaurant.name}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, name: e.target.value })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74] font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Name in Urdu (ہوٹل کا نام)</label>
+                    <input
+                      type="text"
+                      value={editingRestaurant.nameUrdu || ''}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, nameUrdu: e.target.value })}
+                      placeholder="المدینہ بریانی"
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-urdu font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Phone Number</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editingRestaurant.phone}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, phone: e.target.value })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">WhatsApp Order Number</label>
+                    <input
+                      type="tel"
+                      required
+                      value={editingRestaurant.whatsappNumber}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, whatsappNumber: e.target.value })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Matli Market Area</label>
+                    <select
+                      value={editingRestaurant.area}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, area: e.target.value })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-semibold"
+                    >
+                      {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-gray-700 block mb-1">Delivery Fee (₨)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editingRestaurant.deliveryFee}
+                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, deliveryFee: Number(e.target.value) })}
+                      className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Full Address in Matli</label>
+                  <input
+                    type="text"
+                    value={editingRestaurant.address}
+                    onChange={(e) => setEditingRestaurant({ ...editingRestaurant, address: e.target.value })}
+                    className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl"
+                  />
+                </div>
+
+                <div className="p-3 bg-pink-50/50 rounded-2xl border border-pink-200 flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-gray-900 block text-xs">Store Online Status</span>
+                    <span className="text-[10px] text-gray-500">
+                      {editingRestaurant.isOpen ? '🟢 Open & Receiving Customer Orders' : '🔴 Closed / Off Hours'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingRestaurant({ ...editingRestaurant, isOpen: !editingRestaurant.isOpen })}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all ${
+                      editingRestaurant.isOpen
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-rose-600 text-white shadow-xs'
+                    }`}
+                  >
+                    {editingRestaurant.isOpen ? 'Open Now' : 'Closed'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-pink-100">
+                  <button
+                    type="button"
+                    onClick={() => setEditingRestaurant(null)}
+                    className="px-4 py-2 border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="bg-[#E11D74] hover:bg-[#C2185B] text-white font-bold px-5 py-2 rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Save Restaurant Details</span>
                   </button>
                 </div>
               </form>
@@ -1138,13 +1323,11 @@ export const AdminDashboard: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="font-bold text-gray-700 block mb-1">Platform Commission (%)</label>
-                      <input
-                        type="number"
-                        value={newVendorCommission}
-                        onChange={(e) => setNewVendorCommission(Number(e.target.value))}
-                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
-                      />
+                      <label className="font-bold text-gray-700 block mb-1">Commission Policy</label>
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>0% Commission (100% Vendor Payout)</span>
+                      </div>
                     </div>
                     <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-2">
                       <button
@@ -1214,8 +1397,8 @@ export const AdminDashboard: React.FC = () => {
 
                     <div className="p-3 bg-pink-50/40 rounded-2xl border border-pink-100 space-y-1 text-xs">
                       <div className="flex justify-between">
-                        <span className="text-gray-500">Commission Rate</span>
-                        <span className="font-bold text-gray-900">{restaurant.commissionRate}%</span>
+                        <span className="text-gray-500">Commission Policy</span>
+                        <span className="font-bold text-emerald-700">0% (100% Retained)</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Total Lifetime Orders</span>
@@ -1228,19 +1411,14 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-between pt-1 border-t border-pink-50">
-                      <span className="text-[11px] text-gray-500">WhatsApp: {restaurant.whatsappNumber}</span>
+                      <span className="text-[11px] text-gray-500 truncate max-w-[130px]">WA: {restaurant.whatsappNumber}</span>
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => {
-                            const newRate = prompt(`Enter new commission rate for ${restaurant.name} (%)`, restaurant.commissionRate.toString());
-                            if (newRate && !isNaN(Number(newRate))) {
-                              updateRestaurantDetails(restaurant.id, { commissionRate: Number(newRate) });
-                              triggerToast('Commission Updated', `${restaurant.name} rate set to ${newRate}%`, 'info');
-                            }
-                          }}
-                          className="text-xs font-bold text-gray-700 hover:text-[#E11D74] bg-white border border-pink-200 hover:bg-pink-50 px-2.5 py-1 rounded-xl transition-colors"
+                          onClick={() => setEditingRestaurant(restaurant)}
+                          className="text-xs font-bold text-gray-700 hover:text-[#E11D74] bg-white border border-pink-200 hover:bg-pink-50 px-2.5 py-1 rounded-xl transition-colors flex items-center gap-1"
                         >
-                          Edit Rate
+                          <Edit className="w-3 h-3" />
+                          <span>Edit Details</span>
                         </button>
                         <button
                           onClick={() => {

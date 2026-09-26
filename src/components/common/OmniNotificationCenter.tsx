@@ -33,6 +33,7 @@ export const OmniNotificationCenter: React.FC<OmniNotificationCenterProps> = ({
     setTrackingOrderId,
     isAuthenticated,
     loginUser,
+    openLoginModal,
     triggerTestRoleNotification
   } = useApp();
 
@@ -50,6 +51,12 @@ export const OmniNotificationCenter: React.FC<OmniNotificationCenterProps> = ({
     if (n.action) {
       // If user is currently logged out or in different role, switch and navigate seamlessly
       if (n.action.role) {
+        if (n.action.role === 'admin') {
+          openLoginModal('admin');
+          onClose();
+          return;
+        }
+
         if (!isAuthenticated) {
           loginUser('0300-1234567', n.action.role, {
             restaurantId: n.action.restaurantId,

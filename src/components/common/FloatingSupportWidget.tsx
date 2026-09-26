@@ -9,6 +9,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { openWhatsAppChat } from '../../utils/whatsapp';
 import { AIAgentMessage, Restaurant } from '../../types';
+import { sendGeminiChatMessage } from '../../services/geminiService';
 
 interface FloatingSupportWidgetProps {
   onSelectRestaurant?: (restaurant: Restaurant) => void;
@@ -135,65 +136,34 @@ export const FloatingSupportWidget: React.FC<FloatingSupportWidgetProps> = ({
     };
 
     try {
-      const res = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: query,
-          history: messages.slice(-6),
-          context: contextData
-        })
-      });
+      const historyItems = messages.slice(-6).map(m => ({
+        sender: m.sender,
+        text: m.text
+      }));
 
-      if (!res.ok) {
-        throw new Error('API server returned error: ' + res.status);
-      }
-
-      const data = await res.json();
+      const geminiResult = await sendGeminiChatMessage(query, historyItems, contextData);
 
       const aiMsg: AIAgentMessage = {
         id: 'ai-' + Date.now(),
         sender: 'assistant',
-        text: data.reply || 'Main aapki madad karne ke liye hazir hoon. Dobara poochiye!',
+        text: geminiResult.reply || 'Main aapki madad karne ke liye hazir hoon. Dobara poochiye!',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestions: Array.isArray(data.suggestions) ? data.suggestions : ['Best Biryani in Matli?', 'Delivery charges?'],
-        actionType: data.actionType && data.actionType !== 'none' ? data.actionType : undefined,
-        actionTarget: data.actionTarget || undefined
+        suggestions: geminiResult.suggestions || ['Best Biryani in Matli?', 'Delivery charges?'],
+        actionType: geminiResult.actionType && geminiResult.actionType !== 'none' ? geminiResult.actionType : undefined,
+        actionTarget: geminiResult.actionTarget || undefined
       };
 
       setMessages(prev => [...prev, aiMsg]);
     } catch (err) {
-      console.warn('Backend chat failed, generating local fallback:', err);
-      // Client-side fallback if server is momentarily unreachable
-      const q = query.toLowerCase();
-      let fallbackReply = `Assalam o Alaikum! Dastak AI Brain Matli is online. Matli ke mashhoor restaurants jese Al-Madina Biryani, Quetta Royal Chai, aur Pizza Point par taaza food tayar hai! Standard delivery fee ₨ 50 hai.`;
-      let fallbackSuggestions = ['Best Biryani in Matli?', 'Delivery charges?', 'Track my order'];
-      let actType: AIAgentMessage['actionType'] = undefined;
-      let actTarget: string | undefined = undefined;
-
-      if (q.includes('biryani') || q.includes('بریانی') || q.includes('چاول')) {
-        const biryaniRest = restaurants.find(r => r.name.toLowerCase().includes('biryani')) || restaurants[0];
-        fallbackReply = `Matli ki famous Biryani **${biryaniRest.name}** par available hai! Special Matli Chicken Dum Biryani (₨ 280) aur Beef Pulao serve hoti hai. Delivery time sirf 20-30 mins hai.`;
-        actType = 'restaurant';
-        actTarget = biryaniRest.id;
-        fallbackSuggestions = ['Show Biryani Deals', 'Delivery Time?'];
-      } else if (q.includes('track') || q.includes('order') || q.includes('کہاں ہے') || q.includes('آرڈر')) {
-        if (activeOrder) {
-          fallbackReply = `Aapka active order **#${activeOrder.orderNumber}** (${activeOrder.restaurantName}) is waqt status: **${activeOrder.status.toUpperCase()}** par hai.`;
-          actType = 'track';
-          actTarget = activeOrder.id;
-          fallbackSuggestions = ['Live Map Tracker', 'Order Details'];
-        }
-      }
-
+      console.warn('Chat error:', err);
       setMessages(prev => [...prev, {
         id: 'ai-' + Date.now(),
         sender: 'assistant',
-        text: fallbackReply,
+        text: 'Assalam o Alaikum! Dastak AI Brain Matli is online. Matli ke mashhoor restaurants jese Al-Madina Biryani aur Pizza Point par taaza food tayar hai! Standard flat delivery ₨ 50 hai.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        suggestions: fallbackSuggestions,
-        actionType: actType,
-        actionTarget: actTarget
+        suggestions: ['Best Biryani in Matli?', 'Delivery charges?', 'Track my order'],
+        actionType: undefined,
+        actionTarget: undefined
       }]);
     } finally {
       setIsTyping(false);

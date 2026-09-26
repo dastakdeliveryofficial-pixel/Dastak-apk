@@ -6,7 +6,7 @@ export const INITIAL_SETTINGS: PlatformSettings = {
   province: 'Sindh, Pakistan',
   currency: 'PKR',
   currencySymbol: '₨',
-  commissionPercentage: 10,
+  commissionPercentage: 0,
   baseDeliveryFee: 60,
   supportPhone: '+92 301 2345678',
   supportWhatsApp: '923012345678',

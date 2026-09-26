@@ -45,7 +45,14 @@ import {
   subscribeToPromos,
   updatePromoStatusInFirestore,
   deletePromoFromFirestore,
-  savePromoToFirestore
+  savePromoToFirestore,
+  saveRestaurantToFirestore,
+  updateRestaurantInFirestore,
+  deleteRestaurantFromFirestore,
+  saveMenuItemToFirestore,
+  updateMenuItemInFirestore,
+  deleteMenuItemFromFirestore,
+  sanitizeFirestoreData
 } from '../lib/firestoreService';
 
 export interface ToastNotification {
@@ -350,10 +357,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ...user,
             addresses: Array.isArray(user.addresses) ? user.addresses : []
           };
+          const isAdminUser = sanitizedUser.role === 'admin';
+          const restoredRole = isAdminUser 
+            ? (parsed.currentRole || 'admin') 
+            : (parsed.currentRole === 'admin' ? 'customer' : (parsed.currentRole || sanitizedUser.role || 'customer'));
+
           return {
             isAuthenticated: true,
             currentUser: sanitizedUser,
-            currentRole: (parsed.currentRole || sanitizedUser.role || 'customer') as UserRole,
+            currentRole: restoredRole as UserRole,
             activeVendorRestaurantId: (parsed.activeVendorRestaurantId || 'rest-1') as string,
             activeRiderId: (parsed.activeRiderId || 'rider-1') as string
           };
@@ -403,12 +415,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAloChatOpen, setIsAloChatOpen] = useState<boolean>(false);
   const [activeAloChatOrderId, setActiveAloChatOrderId] = useState<string | null>(null);
 
-  // Core Persistent State
+  // Core Persistent State with LocalStorage Caching & Firestore Sync
   const [allUsers, setAllUsers] = useState<User[]>(INITIAL_CUSTOMERS);
   const [currentUser, setCurrentUserState] = useState<User>(initialSession.currentUser);
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(INITIAL_RESTAURANTS);
-  const [menuItems, setMenuItems] = useState<MenuItem[]>(INITIAL_MENU_ITEMS);
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_RESTAURANTS;
+  });
+
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu_items');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_MENU_ITEMS;
+  });
+
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_ORDERS;
+  });
 
   // Device-level placed orders and phone numbers to guarantee orders show for customer
   const [devicePlacedOrderIds, setDevicePlacedOrderIds] = useState<string[]>(() => {
@@ -505,6 +547,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentRole = (role: UserRole) => {
+    if (role === 'admin' && currentRole !== 'admin') {
+      openLoginModal('admin');
+      triggerToast('Super Admin Authentication', 'Please enter Super Admin password to access console', 'warning');
+      return;
+    }
     setCurrentRoleState(role);
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_auth_session');
@@ -783,16 +830,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Subscribe to real-time Orders with Omni-Role Notifications
     const unsubOrders = subscribeToOrders((liveOrders) => {
       const ordersList = liveOrders || [];
-      setOrders(ordersList);
+      let finalOrders = ordersList;
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_orders');
+        if (saved) {
+          const localParsed: Order[] = JSON.parse(saved);
+          const liveIds = new Set(ordersList.map(o => o.id));
+          const missingLocals = localParsed.filter(o => !liveIds.has(o.id));
+          if (missingLocals.length > 0) {
+            finalOrders = [...ordersList, ...missingLocals];
+          }
+        }
+      } catch {}
+
+      finalOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setOrders(finalOrders);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_orders', JSON.stringify(finalOrders));
+      } catch {}
 
       if (!initialOrdersLoadedRef.current) {
-        ordersList.forEach(o => prevOrdersMapRef.current.set(o.id, o.status));
+        finalOrders.forEach(o => prevOrdersMapRef.current.set(o.id, o.status));
         initialOrdersLoadedRef.current = true;
         return;
       }
 
       // Check for incoming orders or status transitions
-      ordersList.forEach(order => {
+      finalOrders.forEach(order => {
         const prevStatus = prevOrdersMapRef.current.get(order.id);
 
         if (!prevStatus) {
@@ -945,8 +1009,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Subscribe to real-time Restaurants
     const unsubRestaurants = subscribeToRestaurants((liveRest) => {
-      if (liveRest && liveRest.length > 0) {
-        setRestaurants(liveRest);
+      const restList = liveRest || [];
+      let finalRestaurants = restList;
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
+        if (saved) {
+          const localParsed: Restaurant[] = JSON.parse(saved);
+          const liveIds = new Set(restList.map(r => r.id));
+          const missingLocals = localParsed.filter(r => !liveIds.has(r.id));
+          if (missingLocals.length > 0) {
+            finalRestaurants = [...restList, ...missingLocals];
+          }
+        }
+      } catch {}
+
+      if (finalRestaurants.length > 0) {
+        setRestaurants(finalRestaurants);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(finalRestaurants));
+        } catch {}
       } else {
         setRestaurants(INITIAL_RESTAURANTS);
       }
@@ -954,8 +1035,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Subscribe to real-time Menu Items
     const unsubMenu = subscribeToMenuItems((liveMenu) => {
-      if (liveMenu && liveMenu.length > 0) {
-        setMenuItems(liveMenu);
+      const menuList = liveMenu || [];
+      let finalMenu = menuList;
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu_items');
+        if (saved) {
+          const localParsed: MenuItem[] = JSON.parse(saved);
+          const liveIds = new Set(menuList.map(m => m.id));
+          const missingLocals = localParsed.filter(m => !liveIds.has(m.id));
+          if (missingLocals.length > 0) {
+            finalMenu = [...menuList, ...missingLocals];
+          }
+        }
+      } catch {}
+
+      if (finalMenu.length > 0) {
+        setMenuItems(finalMenu);
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(finalMenu));
+        } catch {}
       } else {
         setMenuItems(INITIAL_MENU_ITEMS);
       }
@@ -1394,8 +1492,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const placedPhone = deliveryAddress.phone || safeUser.phone || '0300-1234567';
     recordDevicePlacedOrder(createdOrder.id, orderNum, placedPhone);
 
-    // Immediately update local orders list so customerOrderCount increments right away!
-    setOrders(prev => [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)]);
+    // Immediately update local orders list and sync to localStorage so Admin and Customer both see it right away!
+    setOrders(prev => {
+      const updated = [createdOrder, ...prev.filter(o => o.id !== createdOrder.id)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_orders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
 
     // Customer In-App Notification specifically for customer role (bell icon)
     const itemsFormatted = cart.items.map(i => `${i.quantity}x ${i.name}${i.restaurantName ? ` (${i.restaurantName})` : ''}`).join(', ');
@@ -1519,7 +1623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  // Vendor Menu Management with Firestore
+  // Vendor Menu Management with Firestore & LocalStorage Sync
   const addMenuItem = async (itemData: Omit<MenuItem, 'id'>) => {
     const newItemId = 'item-' + Date.now();
     const newItem: MenuItem = {
@@ -1528,27 +1632,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     try {
-      await setDoc(doc(db, 'menuItems', newItemId), newItem);
-    } catch {}
+      await saveMenuItemToFirestore(newItem);
+    } catch (err) {
+      console.warn('Error saving menu item to Firestore:', err);
+    }
 
-    setMenuItems(prev => [newItem, ...prev]);
+    setMenuItems(prev => {
+      const updated = [newItem, ...prev.filter(i => i.id !== newItemId)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Dish Added', `${newItem.name} is now live on your menu`, 'success');
   };
 
   const updateMenuItem = async (id: string, updates: Partial<MenuItem>) => {
     try {
-      await updateDoc(doc(db, 'menuItems', id), updates);
-    } catch {}
+      await updateMenuItemInFirestore(id, updates);
+    } catch (err) {
+      console.warn('Error updating menu item in Firestore:', err);
+    }
 
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    setMenuItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...updates } : item);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Dish Updated', 'Menu item changes saved', 'success');
   };
 
   const deleteMenuItem = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'menuItems', id));
-    } catch {}
-    setMenuItems(prev => prev.filter(item => item.id !== id));
+      await deleteMenuItemFromFirestore(id);
+    } catch (err) {
+      console.warn('Error deleting menu item from Firestore:', err);
+    }
+    setMenuItems(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Dish Deleted', 'Menu item removed', 'info');
   };
 
@@ -1560,9 +1688,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateRestaurantDetails = async (id: string, updates: Partial<Restaurant>) => {
     try {
-      await updateDoc(doc(db, 'restaurants', id), updates);
-    } catch {}
-    setRestaurants(prev => prev.map(r => r.id === id ? { ...r, ...updates } : r));
+      await updateRestaurantInFirestore(id, updates);
+    } catch (err) {
+      console.warn('Error updating restaurant details in Firestore:', err);
+    }
+    setRestaurants(prev => {
+      const updated = prev.map(r => r.id === id ? { ...r, ...updates } : r);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Settings Saved', 'Shop details updated successfully', 'success');
   };
 
@@ -1618,8 +1754,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.error('Error deleting restaurant:', err);
     }
-    setRestaurants(prev => prev.filter(r => r.id !== restaurantId));
-    setMenuItems(prev => prev.filter(i => i.restaurantId !== restaurantId));
+    setRestaurants(prev => {
+      const updated = prev.filter(r => r.id !== restaurantId);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setMenuItems(prev => {
+      const updated = prev.filter(i => i.restaurantId !== restaurantId);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Shop Deleted', 'Restaurant and menu items removed successfully', 'info');
   };
 
@@ -1933,13 +2081,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         phone: data.phone,
         whatsappNumber: data.phone,
         description: `Authentic food and takeaway from ${data.shopName}, Matli.`,
-        commissionRate: 10,
+        commissionRate: 0,
         openingHours: '11:00 AM - 12:00 AM',
         totalOrdersCount: 0,
         totalRevenue: 0,
         isApproved: true
       };
-      await setDoc(doc(db, 'restaurants', vendorRestId), newRest);
+      await saveRestaurantToFirestore(newRest);
+      setRestaurants(prev => {
+        const updated = [newRest, ...prev.filter(r => r.id !== vendorRestId)];
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
     } else if (data.role === 'rider') {
       riderId = 'rider-' + Date.now();
       const newRider: Rider = {
@@ -2124,14 +2279,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       whatsappNumber: vendorData.whatsappNumber || vendorData.phone,
       description: vendorData.description || `Specialty food & delicacies from ${vendorData.name}, Matli.`,
       descriptionUrdu: `دستک پر ${vendorData.name} کا اسپیشل مینیو۔ تیز ہوم ڈلیوری۔`,
-      commissionRate: 10,
+      commissionRate: 0,
       openingHours: vendorData.openingHours || '11:00 AM - 12:00 AM',
       totalOrdersCount: 0,
       totalRevenue: 0,
       isApproved: true
     };
 
-    await setDoc(doc(db, 'restaurants', restaurantId), newRestaurant);
+    await saveRestaurantToFirestore(newRestaurant);
+    setRestaurants(prev => {
+      const updated = [newRestaurant, ...prev.filter(r => r.id !== restaurantId)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     setActiveVendorRestaurantId(restaurantId);
     return { restaurantId, vendorId: newRestaurant.vendorId, restaurant: newRestaurant };
   };
@@ -2313,25 +2475,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: newItemId
     };
     try {
-      await setDoc(doc(db, 'menuItems', newItemId), newItem);
-    } catch {}
-    setMenuItems(prev => [newItem, ...prev]);
+      await saveMenuItemToFirestore(newItem);
+    } catch (err) {
+      console.warn('Admin product add note:', err);
+    }
+    setMenuItems(prev => {
+      const updated = [newItem, ...prev.filter(i => i.id !== newItemId)];
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Product Created by Admin', `${newItem.name} added to catalog in Firestore`, 'success');
   };
 
   const adminUpdateProduct = async (id: string, updates: Partial<MenuItem>) => {
     try {
-      await updateDoc(doc(db, 'menuItems', id), updates);
-    } catch {}
-    setMenuItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+      await updateMenuItemInFirestore(id, updates);
+    } catch (err) {
+      console.warn('Admin product update note:', err);
+    }
+    setMenuItems(prev => {
+      const updated = prev.map(item => item.id === id ? { ...item, ...updates } : item);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Product Updated by Admin', 'Product rates and details saved across Firestore', 'success');
   };
 
   const adminDeleteProduct = async (id: string) => {
     try {
-      await deleteDoc(doc(db, 'menuItems', id));
-    } catch {}
-    setMenuItems(prev => prev.filter(item => item.id !== id));
+      await deleteMenuItemFromFirestore(id);
+    } catch (err) {
+      console.warn('Admin product delete note:', err);
+    }
+    setMenuItems(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
     triggerToast('Product Deleted', 'Item removed from restaurant catalog', 'info');
   };
 

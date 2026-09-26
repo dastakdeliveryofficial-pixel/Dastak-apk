@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   UtensilsCrossed, TrendingUp, DollarSign, Clock, ShoppingBag, 
   CheckCircle2, XCircle, User, Phone, MapPin, Bike, Sparkles, 
   Plus, Edit, Trash2, Power, MessageCircle, AlertCircle, 
-  ChevronRight, BarChart3, Settings, Flame, Layers 
+  ChevronRight, BarChart3, Settings, Flame, Layers, Save, Camera
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem, Order, OrderStatus } from '../../types';
 import { openWhatsAppChat } from '../../utils/whatsapp';
 import { ITEM_CATEGORY_OPTIONS, getCategoryLabel } from '../../data/categoryCatalog';
+import { ImageUploader } from '../common/ImageUploader';
 
 export const VendorDashboard: React.FC = () => {
   const { 
@@ -61,6 +62,58 @@ export const VendorDashboard: React.FC = () => {
   ];
 
   const currentRestaurant = restaurants.find(r => r.id === activeVendorRestaurantId) || restaurants[0];
+
+  // Dedicated Form State for Restaurant Profile & Settings
+  const [profileName, setProfileName] = useState(currentRestaurant?.name || '');
+  const [profileNameUrdu, setProfileNameUrdu] = useState(currentRestaurant?.nameUrdu || '');
+  const [profilePhone, setProfilePhone] = useState(currentRestaurant?.phone || '');
+  const [profileWhatsApp, setProfileWhatsApp] = useState(currentRestaurant?.whatsappNumber || '');
+  const [profileDeliveryTime, setProfileDeliveryTime] = useState(currentRestaurant?.deliveryTime || '20-30 min');
+  const [profileDeliveryFee, setProfileDeliveryFee] = useState<number>(currentRestaurant?.deliveryFee || 50);
+  const [profileOpeningHours, setProfileOpeningHours] = useState(currentRestaurant?.openingHours || '11:00 AM - 12:00 AM');
+  const [profileAddress, setProfileAddress] = useState(currentRestaurant?.address || '');
+  const [profileImage, setProfileImage] = useState(currentRestaurant?.image || '');
+  const [profileArea, setProfileArea] = useState(currentRestaurant?.area || 'Shahi Bazaar');
+
+  // Keep profile state in sync when active restaurant changes
+  useEffect(() => {
+    if (currentRestaurant) {
+      setProfileName(currentRestaurant.name || '');
+      setProfileNameUrdu(currentRestaurant.nameUrdu || '');
+      setProfilePhone(currentRestaurant.phone || '');
+      setProfileWhatsApp(currentRestaurant.whatsappNumber || '');
+      setProfileDeliveryTime(currentRestaurant.deliveryTime || '20-30 min');
+      setProfileDeliveryFee(currentRestaurant.deliveryFee || 50);
+      setProfileOpeningHours(currentRestaurant.openingHours || '11:00 AM - 12:00 AM');
+      setProfileAddress(currentRestaurant.address || '');
+      setProfileImage(currentRestaurant.image || '');
+      setProfileArea(currentRestaurant.area || 'Shahi Bazaar');
+    }
+  }, [currentRestaurant?.id]);
+
+  const handleSaveRestaurantProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentRestaurant) return;
+    try {
+      await updateRestaurantDetails(currentRestaurant.id, {
+        name: profileName.trim() || currentRestaurant.name,
+        nameUrdu: profileNameUrdu.trim() || undefined,
+        phone: profilePhone.trim() || currentRestaurant.phone,
+        whatsappNumber: profileWhatsApp.trim() || currentRestaurant.whatsappNumber,
+        deliveryTime: profileDeliveryTime.trim() || currentRestaurant.deliveryTime,
+        deliveryFee: Number(profileDeliveryFee),
+        openingHours: profileOpeningHours.trim() || currentRestaurant.openingHours,
+        address: profileAddress.trim() || currentRestaurant.address,
+        image: profileImage || currentRestaurant.image,
+        area: profileArea || currentRestaurant.area,
+        commissionRate: 0
+      });
+      triggerToast('Restaurant Details Saved', `${profileName} updated in Firestore & local catalog`, 'success');
+    } catch {
+      triggerToast('Save Failed', 'Please try saving again.', 'error');
+    }
+  };
+
   const restaurantOrders = currentRestaurant ? orders.filter(o => 
     o.restaurantId === currentRestaurant.id || 
     (o.restaurantIds && o.restaurantIds.includes(currentRestaurant.id)) ||
@@ -782,12 +835,12 @@ export const VendorDashboard: React.FC = () => {
               </div>
 
               <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Platform Commission</span>
-                <span className="text-xl sm:text-2xl font-black text-[#FF6B00] mt-1 block">
-                  {currentRestaurant.commissionRate}%
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Vendor Payout Status</span>
+                <span className="text-xl sm:text-2xl font-black text-emerald-600 mt-1 block">
+                  100% Payout
                 </span>
-                <span className="text-[11px] text-gray-400 mt-0.5 block">
-                  Weekly payout to JazzCash/Bank
+                <span className="text-[11px] text-emerald-700 font-bold mt-0.5 block">
+                  0% Commission • 100% Retained
                 </span>
               </div>
             </div>
@@ -830,39 +883,64 @@ export const VendorDashboard: React.FC = () => {
 
         {/* Tab 5: RESTAURANT PROFILE & SETTINGS */}
         {activeTab === 'profile' && (
-          <div className="mt-6 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm max-w-2xl space-y-4">
-            <h3 className="font-bold text-base text-gray-900 pb-2 border-b border-gray-100">
-              Restaurant Details & Timings
-            </h3>
-
-            <div className="space-y-3 text-xs">
+          <div className="mt-6 bg-white rounded-2xl p-5 border border-gray-100 shadow-sm max-w-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Restaurant Name</label>
-                <input
-                  type="text"
-                  value={currentRestaurant.name}
-                  onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { name: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                <h3 className="font-bold text-base text-gray-900">
+                  Restaurant Details & Storefront Profile
+                </h3>
+                <p className="text-xs text-gray-400">
+                  Update your kitchen name, photo, delivery times, and phone numbers.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg">
+                0% Platform Commission
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveRestaurantProfile} className="space-y-4 text-xs">
+              {/* Image Uploader for Restaurant Banner / Photo */}
+              <div className="p-3 bg-gray-50/70 border border-gray-200 rounded-2xl">
+                <ImageUploader
+                  value={profileImage}
+                  onChange={setProfileImage}
+                  label="Restaurant Storefront / Banner Photo"
+                  aspectRatio="wide"
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Name in Urdu</label>
-                <input
-                  type="text"
-                  value={currentRestaurant.nameUrdu || ''}
-                  onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { nameUrdu: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-urdu font-semibold text-gray-900"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Restaurant Name (English)</label>
+                  <input
+                    type="text"
+                    required
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-[#FF6B00]"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Name in Urdu (ہوٹل کا نام)</label>
+                  <input
+                    type="text"
+                    value={profileNameUrdu}
+                    onChange={(e) => setProfileNameUrdu(e.target.value)}
+                    placeholder="مثلاً: المدینہ بریانی"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-urdu font-semibold text-gray-900"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="font-bold text-gray-700 block mb-1">Phone Number</label>
                   <input
                     type="text"
-                    value={currentRestaurant.phone}
-                    onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { phone: e.target.value })}
+                    required
+                    value={profilePhone}
+                    onChange={(e) => setProfilePhone(e.target.value)}
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                   />
                 </div>
@@ -871,20 +949,22 @@ export const VendorDashboard: React.FC = () => {
                   <label className="font-bold text-gray-700 block mb-1">WhatsApp Order Number</label>
                   <input
                     type="text"
-                    value={currentRestaurant.whatsappNumber}
-                    onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { whatsappNumber: e.target.value })}
+                    required
+                    value={profileWhatsApp}
+                    onChange={(e) => setProfileWhatsApp(e.target.value)}
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-gray-700 block mb-1">Delivery Time (min)</label>
+                  <label className="font-bold text-gray-700 block mb-1">Estimated Delivery</label>
                   <input
                     type="text"
-                    value={currentRestaurant.deliveryTime}
-                    onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { deliveryTime: e.target.value })}
+                    value={profileDeliveryTime}
+                    onChange={(e) => setProfileDeliveryTime(e.target.value)}
+                    placeholder="20-30 min"
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                   />
                 </div>
@@ -893,33 +973,46 @@ export const VendorDashboard: React.FC = () => {
                   <label className="font-bold text-gray-700 block mb-1">Delivery Fee (₨)</label>
                   <input
                     type="number"
-                    value={currentRestaurant.deliveryFee}
-                    onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { deliveryFee: Number(e.target.value) })}
+                    min={0}
+                    value={profileDeliveryFee}
+                    onChange={(e) => setProfileDeliveryFee(Number(e.target.value))}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Operating Hours</label>
+                  <input
+                    type="text"
+                    value={profileOpeningHours}
+                    onChange={(e) => setProfileOpeningHours(e.target.value)}
+                    placeholder="11:00 AM - 12:00 AM"
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="font-bold text-gray-700 block mb-1">Operating Hours</label>
+                <label className="font-bold text-gray-700 block mb-1">Address in Matli</label>
                 <input
                   type="text"
-                  value={currentRestaurant.openingHours}
-                  onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { openingHours: e.target.value })}
+                  value={profileAddress}
+                  onChange={(e) => setProfileAddress(e.target.value)}
+                  placeholder="e.g. Shahi Bazaar, Main Market, Matli"
                   className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Address in Matli</label>
-                <input
-                  type="text"
-                  value={currentRestaurant.address}
-                  onChange={(e) => updateRestaurantDetails(currentRestaurant.id, { address: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
-                />
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-[#FF6B00] hover:bg-orange-600 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95 cursor-pointer text-xs sm:text-sm"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Restaurant Details</span>
+                </button>
               </div>
-            </div>
+            </form>
           </div>
         )}
       </div>
@@ -1020,35 +1113,14 @@ export const VendorDashboard: React.FC = () => {
                 />
               </div>
 
-              {/* Image URL & Quick Sample Pickers */}
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Dish Image URL</label>
-                <input
-                  type="text"
+              {/* Image Upload Component */}
+              <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-2xl">
+                <ImageUploader
                   value={itemImage}
-                  onChange={(e) => setItemImage(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl mb-2 font-mono text-[11px]"
+                  onChange={setItemImage}
+                  label="Dish Photo (Upload from Camera / Gallery)"
+                  suggestedTemplates={sampleImages}
                 />
-                
-                <span className="text-[10px] text-gray-400 block mb-1 font-semibold">
-                  Or pick a photo template:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {sampleImages.map((s) => (
-                    <button
-                      key={s.label}
-                      type="button"
-                      onClick={() => setItemImage(s.url)}
-                      className={`text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
-                        itemImage === s.url
-                          ? 'bg-[#FF6B00] text-white border-[#FF6B00]'
-                          : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Combo deal toggle */}

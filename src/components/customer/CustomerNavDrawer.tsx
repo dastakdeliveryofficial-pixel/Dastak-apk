@@ -38,7 +38,8 @@ export const CustomerNavDrawer: React.FC<CustomerNavDrawerProps> = ({
     setIsSoundEnabled,
     orders,
     customerOrderCount,
-    openAIBrain
+    openAIBrain,
+    openLoginModal
   } = useApp();
 
   const customerOrdersCount = customerOrderCount;
@@ -152,13 +153,13 @@ export const CustomerNavDrawer: React.FC<CustomerNavDrawerProps> = ({
                   <button
                     type="button"
                     onClick={() => {
-                      setCurrentRole('admin');
                       onClose();
+                      openLoginModal('admin');
                     }}
                     className="p-2.5 rounded-xl text-left border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all text-xs font-bold flex items-center gap-2"
                   >
                     <ShieldAlert className="w-4 h-4 text-purple-600" />
-                    <span>Admin</span>
+                    <span>Super Admin</span>
                   </button>
                 </div>
               </div>

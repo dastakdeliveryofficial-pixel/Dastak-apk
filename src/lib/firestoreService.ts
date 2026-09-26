@@ -257,15 +257,52 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
 }
 
+/**
+ * Sanitizes object by removing any undefined keys recursively,
+ * ensuring Firestore setDoc/updateDoc/addDoc never throws 'Unsupported field value: undefined'.
+ */
+export function sanitizeFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  try {
+    const jsonStr = JSON.stringify(obj, (key, value) => {
+      if (value === undefined) return undefined;
+      return value;
+    });
+    return JSON.parse(jsonStr);
+  } catch {
+    if (Array.isArray(obj)) {
+      return obj
+        .filter(item => item !== undefined)
+        .map(item => sanitizeFirestoreData(item)) as unknown as T;
+    }
+    if (typeof obj === 'object' && !(obj instanceof Date)) {
+      const sanitized: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value !== undefined) {
+          sanitized[key] = sanitizeFirestoreData(value);
+        }
+      }
+      return sanitized;
+    }
+    return obj;
+  }
+}
+
 // 3. Realtime Orders Listeners & Actions
 export function subscribeToOrders(onUpdate: (orders: Order[]) => void) {
-  const q = query(collection(db, ORDERS_COLLECTION), orderBy('createdAt', 'desc'));
+  // Use collection listener without strict index dependency for maximum robustness
   return onSnapshot(
-    q, 
+    collection(db, ORDERS_COLLECTION), 
     (snapshot) => {
       const ordersList: Order[] = [];
       snapshot.forEach((docSnap) => {
         ordersList.push({ ...(docSnap.data() as Order), id: docSnap.id });
+      });
+      // Sort newest first client-side
+      ordersList.sort((a, b) => {
+        const timeA = new Date(a.createdAt || 0).getTime();
+        const timeB = new Date(b.createdAt || 0).getTime();
+        return timeB - timeA;
       });
       onUpdate(ordersList);
     }, 
@@ -277,11 +314,12 @@ export function subscribeToOrders(onUpdate: (orders: Order[]) => void) {
 
 export async function createFirestoreOrder(orderData: Omit<Order, 'id'>): Promise<Order> {
   try {
-    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), {
+    const rawClean = sanitizeFirestoreData({
       ...orderData,
-      createdAt: new Date().toISOString(),
+      createdAt: orderData.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     });
+    const docRef = await addDoc(collection(db, ORDERS_COLLECTION), rawClean);
 
     return {
       ...orderData,
@@ -303,17 +341,16 @@ export async function updateFirestoreOrderStatus(
 ) {
   try {
     const orderRef = doc(db, ORDERS_COLLECTION, orderId);
-    const updates: Partial<Order> = {
+    const updates: Partial<Order> = sanitizeFirestoreData({
       status,
-      updatedAt: new Date().toISOString()
-    };
+      updatedAt: new Date().toISOString(),
+      ...(riderId ? { riderId } : {}),
+      ...(riderName ? { riderName } : {}),
+      ...(riderPhone ? { riderPhone } : {}),
+      ...(cancelReason ? { cancelReason } : {})
+    });
 
-    if (riderId) updates.riderId = riderId;
-    if (riderName) updates.riderName = riderName;
-    if (riderPhone) updates.riderPhone = riderPhone;
-    if (cancelReason) updates.cancelReason = cancelReason;
-
-    await updateDoc(orderRef, updates);
+    await setDoc(orderRef, updates, { merge: true });
   } catch (err) {
     handleFirestoreError(err, OperationType.UPDATE, `${ORDERS_COLLECTION}/${orderId}`);
     throw err;
@@ -337,6 +374,35 @@ export function subscribeToRestaurants(onUpdate: (restaurants: Restaurant[]) => 
   );
 }
 
+export async function saveRestaurantToFirestore(restaurant: Restaurant): Promise<void> {
+  try {
+    const clean = sanitizeFirestoreData(restaurant);
+    await setDoc(doc(db, RESTAURANTS_COLLECTION, restaurant.id), clean, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${RESTAURANTS_COLLECTION}/${restaurant.id}`);
+    throw err;
+  }
+}
+
+export async function updateRestaurantInFirestore(id: string, updates: Partial<Restaurant>): Promise<void> {
+  try {
+    const clean = sanitizeFirestoreData(updates);
+    await setDoc(doc(db, RESTAURANTS_COLLECTION, id), clean, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${RESTAURANTS_COLLECTION}/${id}`);
+    throw err;
+  }
+}
+
+export async function deleteRestaurantFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, RESTAURANTS_COLLECTION, id));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${RESTAURANTS_COLLECTION}/${id}`);
+    throw err;
+  }
+}
+
 export function subscribeToMenuItems(onUpdate: (items: MenuItem[]) => void) {
   return onSnapshot(
     collection(db, MENU_ITEMS_COLLECTION), 
@@ -351,6 +417,35 @@ export function subscribeToMenuItems(onUpdate: (items: MenuItem[]) => void) {
       handleFirestoreError(err, OperationType.LIST, MENU_ITEMS_COLLECTION);
     }
   );
+}
+
+export async function saveMenuItemToFirestore(item: MenuItem): Promise<void> {
+  try {
+    const clean = sanitizeFirestoreData(item);
+    await setDoc(doc(db, MENU_ITEMS_COLLECTION, item.id), clean, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, `${MENU_ITEMS_COLLECTION}/${item.id}`);
+    throw err;
+  }
+}
+
+export async function updateMenuItemInFirestore(id: string, updates: Partial<MenuItem>): Promise<void> {
+  try {
+    const clean = sanitizeFirestoreData(updates);
+    await setDoc(doc(db, MENU_ITEMS_COLLECTION, id), clean, { merge: true });
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, `${MENU_ITEMS_COLLECTION}/${id}`);
+    throw err;
+  }
+}
+
+export async function deleteMenuItemFromFirestore(id: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, MENU_ITEMS_COLLECTION, id));
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, `${MENU_ITEMS_COLLECTION}/${id}`);
+    throw err;
+  }
 }
 
 export function subscribeToRiders(onUpdate: (riders: Rider[]) => void) {

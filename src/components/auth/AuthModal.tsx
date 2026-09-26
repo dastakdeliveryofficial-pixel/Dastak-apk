@@ -626,17 +626,6 @@ export const AuthModal: React.FC = () => {
                     <span>Open Admin Control Dashboard</span>
                   </button>
                 </form>
-
-                <div className="pt-2 border-t border-gray-100">
-                  <button
-                    type="button"
-                    onClick={() => loginUser('admin@dastakdelivery.pk', 'admin')}
-                    className="w-full py-2.5 bg-amber-50 border border-amber-200 text-amber-900 rounded-xl text-xs font-bold hover:bg-amber-100/70 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-600" />
-                    <span>Instant Master Admin Access (Demo Bypass)</span>
-                  </button>
-                </div>
               </div>
             )}
 
