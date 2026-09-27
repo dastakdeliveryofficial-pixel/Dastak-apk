@@ -3,7 +3,7 @@ import { Restaurant, Order } from '../types';
 
 export interface ChatContext {
   restaurants: Restaurant[];
-  activeOrder?: Order | { id: string; orderNumber: string; restaurantName: string; status: any; total: number } | null;
+  activeOrder?: Order | { id: string; orderNumber: string; restaurantName: string; status: any; total: number; paymentMethod?: string } | null;
   cartItemsCount?: number;
   cartTotal?: number;
   userName?: string;
@@ -43,7 +43,7 @@ function generateLocalMatliResponse(
       };
 
       return {
-        reply: `Aapka active order **#${activeOrder.orderNumber}** (${activeOrder.restaurantName}) is waqt: **${statusLabels[activeOrder.status] || activeOrder.status}** par hai. Total amount: **₨ ${activeOrder.total}** (${activeOrder.paymentMethod.toUpperCase()}). Hamara rider jald aap tak pohanch raha hai!`,
+        reply: `Aapka active order **#${activeOrder.orderNumber}** (${activeOrder.restaurantName}) is waqt: **${statusLabels[activeOrder.status] || activeOrder.status}** par hai. Total amount: **₨ ${activeOrder.total}** (${activeOrder.paymentMethod ? activeOrder.paymentMethod.toUpperCase() : 'COD'}). Hamara rider jald aap tak pohanch raha hai!`,
         suggestions: ['Track Live on Map', 'WhatsApp Support', 'Order Details'],
         actionType: 'track',
         actionTarget: activeOrder.id,
