@@ -111,6 +111,7 @@ export interface Order {
   customerId: string;
   customerName: string;
   customerPhone: string;
+  customerEmail?: string;
   restaurantId: string;
   restaurantName: string;
   restaurantPhone: string;

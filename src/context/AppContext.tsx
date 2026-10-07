@@ -42,6 +42,7 @@ import {
   subscribeToNotifications,
   markNotificationReadInFirestore,
   markAllNotificationsReadInFirestore,
+  clearAllNotificationsFromFirestore,
   subscribeToPromos,
   updatePromoStatusInFirestore,
   deletePromoFromFirestore,
@@ -302,6 +303,17 @@ export function normalizePhone(phone?: string | null): string {
   return digits;
 }
 
+export function isPlaceholderPhone(phone?: string | null): boolean {
+  if (!phone) return true;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits || digits.length < 7) return true;
+  const norm = normalizePhone(phone);
+  if (norm === '3001234567' || norm === '3000000000' || /^0+$/.test(digits) || /^1+$/.test(digits)) {
+    return true;
+  }
+  return false;
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_lang');
@@ -335,9 +347,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const defaultGuestUser: User = {
     id: 'guest-customer',
-    name: 'Matli Customer',
-    phone: '0300-1234567',
-    email: 'customer@dastak.pk',
+    name: 'Guest Customer',
+    phone: '',
+    email: '',
     role: 'customer',
     addresses: [],
     isBlocked: false,
@@ -374,7 +386,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       console.error('Error restoring auth session:', e);
     }
-    const fallbackUser: User = INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const fallbackUser: User = defaultGuestUser;
     return {
       isAuthenticated: false,
       currentUser: {
@@ -421,10 +433,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     try {
+      if (typeof window !== 'undefined' && !localStorage.getItem('dastak_all_restaurants_wiped_v1')) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_restaurants');
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_menu_items');
+        return [];
+      }
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
     return INITIAL_RESTAURANTS;
@@ -432,10 +449,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
     try {
+      if (typeof window !== 'undefined' && !localStorage.getItem('dastak_all_restaurants_wiped_v1')) {
+        return [];
+      }
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu_items');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
     return INITIAL_MENU_ITEMS;
@@ -443,6 +463,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
+      if (typeof window !== 'undefined' && !localStorage.getItem('dastak_fake_notifs_wiped_v2')) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_orders');
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_omni_notifications');
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_device_order_ids');
+        return [];
+      }
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_orders');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -513,7 +539,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     vendorRestId?: string,
     riderId?: string
   ) => {
-    const fallbackUser: User = INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const fallbackUser: User = defaultGuestUser;
     const safeUser: User = user && user.id ? {
       ...defaultGuestUser,
       ...user,
@@ -601,6 +627,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Omni-Role Notifications State (Persists even across logouts)
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>(() => {
     try {
+      if (typeof window !== 'undefined' && !localStorage.getItem('dastak_fake_notifs_wiped_v2')) {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_omni_notifications');
+        return [];
+      }
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_omni_notifications');
       return saved ? JSON.parse(saved) : [];
     } catch {
@@ -766,10 +796,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const clearAllAppNotifications = () => {
+  const clearAllAppNotifications = async () => {
     setAppNotifications([]);
+    setFirestoreNotifications([]);
     try {
       localStorage.removeItem(LOCAL_STORAGE_KEY + '_omni_notifications');
+      await clearAllNotificationsFromFirestore();
     } catch {}
   };
 
@@ -858,8 +890,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Check for incoming orders or status transitions
       finalOrders.forEach(order => {
         const prevStatus = prevOrdersMapRef.current.get(order.id);
+        const orderAgeMs = Date.now() - new Date(order.createdAt || 0).getTime();
+        const isFreshOrder = orderAgeMs >= 0 && orderAgeMs < 120000;
 
-        if (!prevStatus) {
+        if (!prevStatus && isFreshOrder) {
           // BRAND NEW ORDER DETECTED
           // 1. Vendor Alert
           dispatchOmniNotification({
@@ -1007,56 +1041,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     });
 
-    // Subscribe to real-time Restaurants
+    // Subscribe to real-time Restaurants (keeps user-added restaurants permanently synced in Firebase & localStorage)
     const unsubRestaurants = subscribeToRestaurants((liveRest) => {
       const restList = liveRest || [];
-      let finalRestaurants = restList;
+      let deletedRestIds: string[] = [];
       try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
-        if (saved) {
-          const localParsed: Restaurant[] = JSON.parse(saved);
-          const liveIds = new Set(restList.map(r => r.id));
-          const missingLocals = localParsed.filter(r => !liveIds.has(r.id));
-          if (missingLocals.length > 0) {
-            finalRestaurants = [...restList, ...missingLocals];
+        const delSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_rest_ids');
+        if (delSaved) deletedRestIds = JSON.parse(delSaved);
+      } catch {}
+
+      let mergedRestaurants = restList.filter(r => !deletedRestIds.includes(r.id));
+
+      try {
+        const savedLocal = localStorage.getItem(LOCAL_STORAGE_KEY + '_restaurants');
+        if (savedLocal) {
+          const localParsed: Restaurant[] = JSON.parse(savedLocal);
+          if (Array.isArray(localParsed)) {
+            const liveIds = new Set(mergedRestaurants.map(r => r.id));
+            const unsyncedLocals = localParsed.filter(
+              r => r && r.id && !liveIds.has(r.id) && !deletedRestIds.includes(r.id)
+            );
+            if (unsyncedLocals.length > 0) {
+              mergedRestaurants = [...unsyncedLocals, ...mergedRestaurants];
+              // Automatically push any unsynced local restaurants to Firebase so they are permanently saved
+              unsyncedLocals.forEach(r => {
+                saveRestaurantToFirestore(r).catch(() => {});
+              });
+            }
           }
         }
       } catch {}
 
-      if (finalRestaurants.length > 0) {
-        setRestaurants(finalRestaurants);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(finalRestaurants));
-        } catch {}
-      } else {
-        setRestaurants(INITIAL_RESTAURANTS);
-      }
+      setRestaurants(mergedRestaurants);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_restaurants', JSON.stringify(mergedRestaurants));
+      } catch {}
     });
 
-    // Subscribe to real-time Menu Items
+    // Subscribe to real-time Menu Items (keeps user-added menu items permanently synced in Firebase & localStorage)
     const unsubMenu = subscribeToMenuItems((liveMenu) => {
       const menuList = liveMenu || [];
-      let finalMenu = menuList;
+      let deletedItemIds: string[] = [];
       try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu_items');
-        if (saved) {
-          const localParsed: MenuItem[] = JSON.parse(saved);
-          const liveIds = new Set(menuList.map(m => m.id));
-          const missingLocals = localParsed.filter(m => !liveIds.has(m.id));
-          if (missingLocals.length > 0) {
-            finalMenu = [...menuList, ...missingLocals];
+        const delSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_item_ids');
+        if (delSaved) deletedItemIds = JSON.parse(delSaved);
+      } catch {}
+
+      let mergedMenu = menuList.filter(i => !deletedItemIds.includes(i.id));
+
+      try {
+        const savedLocal = localStorage.getItem(LOCAL_STORAGE_KEY + '_menu_items');
+        if (savedLocal) {
+          const localParsed: MenuItem[] = JSON.parse(savedLocal);
+          if (Array.isArray(localParsed)) {
+            const liveIds = new Set(mergedMenu.map(i => i.id));
+            const unsyncedLocals = localParsed.filter(
+              i => i && i.id && !liveIds.has(i.id) && !deletedItemIds.includes(i.id)
+            );
+            if (unsyncedLocals.length > 0) {
+              mergedMenu = [...unsyncedLocals, ...mergedMenu];
+              unsyncedLocals.forEach(item => {
+                saveMenuItemToFirestore(item).catch(() => {});
+              });
+            }
           }
         }
       } catch {}
 
-      if (finalMenu.length > 0) {
-        setMenuItems(finalMenu);
-        try {
-          localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(finalMenu));
-        } catch {}
-      } else {
-        setMenuItems(INITIAL_MENU_ITEMS);
-      }
+      setMenuItems(mergedMenu);
+      try {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_menu_items', JSON.stringify(mergedMenu));
+      } catch {}
     });
 
     // Subscribe to real-time Riders
@@ -1450,13 +1505,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       : primaryRest.deliveryTime;
 
     const orderNum = 'DST-' + Math.floor(1000 + Math.random() * 9000);
-    const safeUser = currentUser || INITIAL_CUSTOMERS[0] || defaultGuestUser;
+    const finalCustomerId = (isAuthenticated && currentUser?.id) ? currentUser.id : 'guest-customer';
+    const finalCustomerName = currentUser?.name || deliveryAddress.label || 'Matli Customer';
+    const finalCustomerPhone = deliveryAddress.phone || currentUser?.phone || '';
+    const finalCustomerEmail = currentUser?.email || '';
 
     const orderData: Omit<Order, 'id'> = {
       orderNumber: orderNum,
-      customerId: safeUser.id || 'guest-customer',
-      customerName: safeUser.name || 'Matli Customer',
-      customerPhone: deliveryAddress.phone || safeUser.phone || '0300-1234567',
+      customerId: finalCustomerId,
+      customerName: finalCustomerName,
+      customerPhone: finalCustomerPhone,
+      customerEmail: finalCustomerEmail,
       restaurantId: primaryRest.id,
       restaurantName: combinedRestName,
       restaurantPhone: combinedRestPhone,
@@ -1489,7 +1548,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // Immediately record on device so this customer ALWAYS sees this order across sessions
-    const placedPhone = deliveryAddress.phone || safeUser.phone || '0300-1234567';
+    const placedPhone = deliveryAddress.phone || currentUser?.phone || '';
     recordDevicePlacedOrder(createdOrder.id, orderNum, placedPhone);
 
     // Immediately update local orders list and sync to localStorage so Admin and Customer both see it right away!
@@ -1509,7 +1568,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       targetRole: 'customer',
       orderId: createdOrder.id,
       orderNumber: orderNum,
-      customerName: safeUser.name || 'Matli Customer',
+      customerName: finalCustomerName,
       items: itemsFormatted,
       title: `🛍️ Order Placed #${orderNum}`,
       message: `Your order from ${combinedRestName} (₨ ${cartTotal}) has been received!`,
@@ -1525,7 +1584,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await createFirestoreNotification({
         orderId: createdOrder.id,
         orderNumber: orderNum,
-        customerName: safeUser.name || deliveryAddress.phone || 'Matli Customer',
+        customerName: finalCustomerName || deliveryAddress.phone || 'Matli Customer',
         customerPhone: placedPhone,
         restaurantName: combinedRestName,
         items: itemsFormatted,
@@ -1666,6 +1725,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMenuItem = async (id: string) => {
     try {
+      const delSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_item_ids');
+      const delList: string[] = delSaved ? JSON.parse(delSaved) : [];
+      if (!delList.includes(id)) {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_item_ids', JSON.stringify([...delList, id]));
+      }
+    } catch {}
+    try {
       await deleteMenuItemFromFirestore(id);
     } catch (err) {
       console.warn('Error deleting menu item from Firestore:', err);
@@ -1745,9 +1811,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteRestaurant = async (restaurantId: string) => {
+    const itemsToDelete = menuItems.filter(i => i.restaurantId === restaurantId);
+    try {
+      const delRestSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_rest_ids');
+      const delRestList: string[] = delRestSaved ? JSON.parse(delRestSaved) : [];
+      if (!delRestList.includes(restaurantId)) {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_rest_ids', JSON.stringify([...delRestList, restaurantId]));
+      }
+
+      const delItemSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_item_ids');
+      const delItemList: string[] = delItemSaved ? JSON.parse(delItemSaved) : [];
+      const newDelItems = Array.from(new Set([...delItemList, ...itemsToDelete.map(i => i.id)]));
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_item_ids', JSON.stringify(newDelItems));
+    } catch {}
+
     try {
       await deleteDoc(doc(db, 'restaurants', restaurantId));
-      const itemsToDelete = menuItems.filter(i => i.restaurantId === restaurantId);
       for (const item of itemsToDelete) {
         await deleteDoc(doc(db, 'menuItems', item.id));
       }
@@ -1773,14 +1852,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const clearAllRestaurantsAndVendors = async () => {
     try {
+      const allRestIds = restaurants.map(r => r.id);
+      const allItemIds = menuItems.map(i => i.id);
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_rest_ids', JSON.stringify(allRestIds));
+      localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_item_ids', JSON.stringify(allItemIds));
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_restaurants');
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_menu_items');
       await clearAllRestaurantsAndMenuFromFirestore();
     } catch (err) {
       console.error('Error clearing vendors:', err);
     }
     setRestaurants([]);
     setMenuItems([]);
-    setOrders([]);
-    triggerToast('Vendors Cleared', 'All dummy restaurants and vendor data have been cleared', 'success');
+    clearCart();
+    triggerToast('Vendors Cleared', 'All restaurants and menu items have been deleted', 'success');
   };
 
   const toggleUserBlock = async (userId: string) => {
@@ -2076,7 +2161,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deliveryTime: '20-30 min',
         minOrder: 150,
         deliveryFee: 50,
-        address: `${data.area || 'Shahi Bazaar'}, Matli`,
+        address: data.address?.trim() || `${data.area || 'Shahi Bazaar'}, Matli`,
         area: data.area || 'Shahi Bazaar',
         phone: data.phone,
         whatsappNumber: data.phone,
@@ -2118,6 +2203,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await setDoc(doc(db, 'riders', riderId), newRider);
     }
 
+    if (data.role === 'customer') {
+      setDevicePlacedOrderIds([]);
+      try {
+        localStorage.removeItem(LOCAL_STORAGE_KEY + '_device_order_ids');
+      } catch {}
+    }
+
     syncAuthSession(true, user, data.role, vendorRestId, riderId);
     setIsAuthModalOpen(false);
     sounds.playOrderSuccess();
@@ -2145,11 +2237,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (existingUser) {
         targetUser = existingUser;
       } else {
+        const isEmail = emailOrPhone.includes('@');
         targetUser = {
           id: 'user-' + Date.now(),
-          name: extra?.name || (emailOrPhone.includes('@') ? emailOrPhone.split('@')[0] : 'Matli Customer'),
-          phone: emailOrPhone.includes('@') ? '0300-1234567' : emailOrPhone,
-          email: emailOrPhone.includes('@') ? emailOrPhone : `${emailOrPhone.replace(/[^0-9]/g, '')}@dastak.pk`,
+          name: extra?.name || (isEmail ? emailOrPhone.split('@')[0] : 'Matli Customer'),
+          phone: isEmail ? '' : emailOrPhone,
+          email: isEmail ? emailOrPhone : `${emailOrPhone.replace(/[^0-9]/g, '')}@dastak.pk`,
           role: 'customer',
           addresses: [],
           isBlocked: false,
@@ -2169,7 +2262,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     }
 
-    if (role === 'customer' && targetUser.phone) {
+    if (role === 'customer' && targetUser.phone && !isPlaceholderPhone(targetUser.phone)) {
       recordCustomerPhone(targetUser.phone);
     }
     syncAuthSession(true, targetUser, role, extra?.restaurantId, extra?.riderId);
@@ -2184,6 +2277,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     address?: string; 
     area?: string;
   }): Promise<User> => {
+    // Clear any past device order IDs so brand-new account starts with zero orders
+    setDevicePlacedOrderIds([]);
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_device_order_ids');
+    } catch {}
+
     const cleanPhone = data.phone.trim();
     const userEmail = data.email?.trim() || `${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
     const userPass = data.password?.trim() || 'dastak123456';
@@ -2243,26 +2342,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }): Promise<{ restaurantId: string; vendorId: string; restaurant: Restaurant }> => {
     const timestamp = Date.now();
     const restaurantId = 'rest-' + timestamp;
-    const cleanPhone = vendorData.phone.trim();
-    const vendorEmail = vendorData.email?.trim() || `vendor_${cleanPhone.replace(/[^0-9]/g, '')}@dastak.pk`;
-    const vendorPass = vendorData.password?.trim() || 'vendor123456';
-
-    try {
-      await registerWithEmailPassword({
-        email: vendorEmail,
-        pass: vendorPass,
-        name: vendorData.ownerName,
-        phone: cleanPhone,
-        role: 'vendor',
-        area: vendorData.area,
-        shopName: vendorData.name,
-        shopOwner: vendorData.ownerName
-      });
-    } catch {}
+    const vendorId = 'vnd-' + timestamp;
+    const cleanPhone = vendorData.phone.trim() || '0300-1122334';
+    const vendorEmail = vendorData.email?.trim() || `vendor_${timestamp}@dastak.pk`;
 
     const newRestaurant: Restaurant = {
       id: restaurantId,
-      vendorId: 'vnd-' + timestamp,
+      vendorId: vendorId,
       name: vendorData.name.trim(),
       nameUrdu: vendorData.nameUrdu?.trim() || vendorData.name.trim(),
       image: vendorData.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop&q=80',
@@ -2273,10 +2359,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deliveryTime: vendorData.deliveryTime || '20-30 min',
       minOrder: vendorData.minOrder || 150,
       deliveryFee: vendorData.deliveryFee || 50,
-      address: vendorData.address || `${vendorData.area}, Matli`,
-      area: vendorData.area || 'Shahi Bazaar',
-      phone: vendorData.phone,
-      whatsappNumber: vendorData.whatsappNumber || vendorData.phone,
+      address: vendorData.address?.trim() || `${vendorData.area || 'Shahi Bazaar'}, Matli`,
+      area: vendorData.area?.trim() || 'Shahi Bazaar',
+      phone: cleanPhone,
+      whatsappNumber: vendorData.whatsappNumber?.trim() || cleanPhone,
       description: vendorData.description || `Specialty food & delicacies from ${vendorData.name}, Matli.`,
       descriptionUrdu: `دستک پر ${vendorData.name} کا اسپیشل مینیو۔ تیز ہوم ڈلیوری۔`,
       commissionRate: 0,
@@ -2286,7 +2372,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isApproved: true
     };
 
-    await saveRestaurantToFirestore(newRestaurant);
+    // Save immediately to localStorage first so it is never lost
     setRestaurants(prev => {
       const updated = [newRestaurant, ...prev.filter(r => r.id !== restaurantId)];
       try {
@@ -2294,8 +2380,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    // Save permanently to Firebase Firestore
+    try {
+      await saveRestaurantToFirestore(newRestaurant);
+    } catch (err) {
+      console.error('Error saving restaurant to Firestore:', err);
+    }
+
+    // Also save vendor user record in Firestore without logging out Super Admin
+    const vendorUserDoc: User = {
+      id: vendorId,
+      name: vendorData.ownerName || vendorData.name.trim(),
+      email: vendorEmail,
+      phone: cleanPhone,
+      role: 'vendor',
+      addresses: [],
+      isBlocked: false,
+      createdAt: new Date().toISOString()
+    };
+    try {
+      await setDoc(doc(db, 'users', vendorId), vendorUserDoc);
+    } catch {}
+
     setActiveVendorRestaurantId(restaurantId);
-    return { restaurantId, vendorId: newRestaurant.vendorId, restaurant: newRestaurant };
+
+    // If registered from Vendor Portal / LoginScreen (not Super Admin), sign into the vendor session
+    if (currentRole !== 'admin') {
+      syncAuthSession(true, vendorUserDoc, 'vendor', restaurantId);
+    }
+
+    triggerToast('Restaurant Saved Permanently!', `${newRestaurant.name} saved to Firebase & live catalog`, 'success');
+    return { restaurantId, vendorId, restaurant: newRestaurant };
   };
 
   const registerRider = async (riderData: {
@@ -2350,9 +2466,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const recordCustomerPhone = (phone: string) => {
-    if (!phone) return;
+    if (!phone || isPlaceholderPhone(phone)) return;
+    const cleanNorm = normalizePhone(phone);
+    if (!cleanNorm) return;
     setDevicePhones(prev => {
-      const updated = Array.from(new Set([phone, ...prev]));
+      if (prev.some(p => normalizePhone(p) === cleanNorm)) return prev;
+      const updated = [phone, ...prev];
       try {
         localStorage.setItem(LOCAL_STORAGE_KEY + '_device_phones', JSON.stringify(updated));
       } catch {}
@@ -2369,64 +2488,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    if (phone) {
+    if (phone && !isPlaceholderPhone(phone)) {
       recordCustomerPhone(phone);
     }
   };
 
-  // Real-time Customer Orders and Order Count - Multi-vector matching guarantees customer sees all their orders
+  // Real-time Customer Orders and Order Count - Strictly scoped to authenticated customer or active guest session
   const customerOrders = React.useMemo(() => {
-    const currentNormPhone = normalizePhone(currentUser?.phone);
-    const userAddrNormPhones = (currentUser?.addresses || [])
-      .map(a => normalizePhone(a.phone))
-      .filter(Boolean);
-    const devNormPhones = devicePhones
-      .map(p => normalizePhone(p))
+    // 1. Guest mode (User is not logged in)
+    if (!isAuthenticated || !currentUser) {
+      return (orders || []).filter(o => {
+        // Must NOT belong to a registered customer account
+        const isRegisteredOrder = o.customerId && o.customerId !== 'guest-customer' && o.customerId !== 'customer-matli-1';
+        if (isRegisteredOrder) return false;
+
+        // Placed in this device session
+        if (devicePlacedOrderIds.includes(o.id) || (o.orderNumber && devicePlacedOrderIds.includes(o.orderNumber))) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    // 2. Authenticated Customer mode:
+    // A customer must ONLY see orders they personally placed!
+    const currentNormPhone = !isPlaceholderPhone(currentUser.phone) ? normalizePhone(currentUser.phone) : '';
+    const userAddrNormPhones = (currentUser.addresses || [])
+      .map(a => a.phone && !isPlaceholderPhone(a.phone) ? normalizePhone(a.phone) : '')
       .filter(Boolean);
 
-    const allMatchingPhones = new Set<string>([
+    const userPhones = new Set<string>([
       ...(currentNormPhone ? [currentNormPhone] : []),
-      ...userAddrNormPhones,
-      ...devNormPhones
+      ...userAddrNormPhones
     ]);
 
+    const userEmail = currentUser.email?.trim().toLowerCase();
+    const isGenericEmail = !userEmail || userEmail === 'customer@dastak.pk' || userEmail === 'guest@dastak.pk';
+
     return (orders || []).filter(o => {
-      // 1. Matched by device placed order ID or order number
+      // 1. Primary rule: Matched by exact customerId
+      if (currentUser.id && o.customerId === currentUser.id) {
+        return true;
+      }
+
+      // 2. Matched by verified personal email (if non-generic)
+      if (!isGenericEmail && o.customerEmail && o.customerEmail.toLowerCase().trim() === userEmail) {
+        return true;
+      }
+
+      // 3. Matched by valid personal phone number (if customer has non-placeholder phone)
+      const orderNormPhone = !isPlaceholderPhone(o.customerPhone) ? normalizePhone(o.customerPhone) : '';
+      if (orderNormPhone && userPhones.has(orderNormPhone)) {
+        // Disallow if order explicitly belongs to ANOTHER registered customer ID
+        if (o.customerId && o.customerId !== 'guest-customer' && o.customerId !== 'customer-matli-1' && o.customerId !== currentUser.id) {
+          return false;
+        }
+        return true;
+      }
+
+      // 4. Placed on this device by this user during this session
       if (devicePlacedOrderIds.includes(o.id) || (o.orderNumber && devicePlacedOrderIds.includes(o.orderNumber))) {
-        return true;
-      }
-
-      // 2. Matched by customerId
-      if (currentUser?.id && o.customerId === currentUser.id) {
-        return true;
-      }
-
-      // 3. Matched by email
-      if (currentUser?.email && o.customerEmail && o.customerEmail.toLowerCase() === currentUser.email.toLowerCase()) {
-        return true;
-      }
-
-      // 4. Matched by normalized phone (profile phone, address phones, or device phones)
-      const orderNormPhone = normalizePhone(o.customerPhone);
-      if (orderNormPhone && allMatchingPhones.has(orderNormPhone)) {
-        return true;
-      }
-
-      // 5. Matched by custom customer name (ignoring default/generic names)
-      if (
-        currentUser?.name &&
-        currentUser.name.trim() !== '' &&
-        currentUser.name !== 'Matli Customer' &&
-        currentUser.name !== 'Guest' &&
-        o.customerName &&
-        o.customerName.toLowerCase().trim() === currentUser.name.toLowerCase().trim()
-      ) {
-        return true;
+        // Disallow if order explicitly belongs to ANOTHER registered customer ID
+        if (o.customerId && o.customerId !== 'guest-customer' && o.customerId !== 'customer-matli-1' && o.customerId !== currentUser.id) {
+          return false;
+        }
+        // If order has a real phone and it doesn't match this customer's phone, it's not theirs
+        if (orderNormPhone && currentNormPhone && orderNormPhone !== currentNormPhone) {
+          return false;
+        }
+        if (o.customerId === currentUser.id) {
+          return true;
+        }
       }
 
       return false;
     });
-  }, [orders, currentUser?.id, currentUser?.phone, currentUser?.name, currentUser?.email, currentUser?.addresses, devicePlacedOrderIds, devicePhones]);
+  }, [orders, isAuthenticated, currentUser?.id, currentUser?.phone, currentUser?.email, currentUser?.addresses, devicePlacedOrderIds]);
 
   const customerOrderCount = customerOrders.length;
 
@@ -2438,13 +2575,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logoutUser = async () => {
     try {
-      // 1. Immediately wipe local auth storage
+      // 1. Immediately wipe local auth storage and device orders
       localStorage.removeItem(LOCAL_STORAGE_KEY + '_auth_session');
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_device_order_ids');
+      localStorage.removeItem(LOCAL_STORAGE_KEY + '_device_phones');
 
       // 2. Reset React state synchronously
       setIsAuthenticatedState(false);
       setCurrentRoleState('customer');
-      setCurrentUserState(INITIAL_CUSTOMERS[0] || defaultGuestUser);
+      setCurrentUserState(defaultGuestUser);
+      setDevicePlacedOrderIds([]);
+      setDevicePhones([]);
       setSelectedRestaurant(null);
       setTrackingOrderId(null);
       setIsAuthModalOpen(false);
@@ -2506,6 +2647,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const adminDeleteProduct = async (id: string) => {
+    try {
+      const delSaved = localStorage.getItem(LOCAL_STORAGE_KEY + '_deleted_item_ids');
+      const delList: string[] = delSaved ? JSON.parse(delSaved) : [];
+      if (!delList.includes(id)) {
+        localStorage.setItem(LOCAL_STORAGE_KEY + '_deleted_item_ids', JSON.stringify([...delList, id]));
+      }
+    } catch {}
     try {
       await deleteMenuItemFromFirestore(id);
     } catch (err) {

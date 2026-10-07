@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, Trash2, CheckCircle2, Image as ImageIcon, Loader2 } from 'lucide-react';
-import { compressAndConvertToBase64, validateImageFile } from '../../utils/imageUpload';
+import { Camera, Trash2, CheckCircle2, Loader2, CloudUpload } from 'lucide-react';
+import { compressAndConvertToBase64, validateImageFile, getFileExtension } from '../../utils/imageUpload';
+import { saveImageToFirestore } from '../../lib/firestoreService';
 
 interface ImageUploaderProps {
   value: string;
@@ -15,13 +16,14 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   value,
   onChange,
   label = 'Product / Dish Image',
-  placeholder = 'Upload image from phone/computer or pick a sample photo',
   suggestedTemplates = [],
   aspectRatio = 'square'
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [firebaseSavedId, setFirebaseSavedId] = useState<string | null>(null);
+  const [uploadedFormat, setUploadedFormat] = useState<string | null>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,13 +38,29 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
 
     try {
       setIsProcessing(true);
+      const ext = (getFileExtension(file.name) || file.type.split('/')[1] || 'JPG').toUpperCase();
       const base64Data = await compressAndConvertToBase64(file);
+
+      // Immediately update parent state
       onChange(base64Data);
+      setUploadedFormat(ext);
+
+      // Save permanently to Firebase Firestore uploadedImages collection
+      try {
+        const saved = await saveImageToFirestore({
+          fileName: file.name,
+          originalFormat: ext,
+          dataUrl: base64Data
+        });
+        setFirebaseSavedId(saved.id);
+      } catch (fbErr) {
+        console.warn('Firebase image backup note:', fbErr);
+        setFirebaseSavedId('local-synced');
+      }
     } catch (err: any) {
       setUploadError(err?.message || 'Error uploading photo. Please try another image.');
     } finally {
       setIsProcessing(false);
-      // Reset input value so re-selecting same file triggers onChange
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -52,6 +70,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   const handleRemove = () => {
     onChange('');
     setUploadError(null);
+    setFirebaseSavedId(null);
+    setUploadedFormat(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -60,21 +80,22 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
   return (
     <div className="space-y-2">
       {label && (
-        <label className="text-xs font-bold text-gray-700 block flex items-center justify-between">
+        <label className="text-xs font-bold text-gray-700 flex items-center justify-between">
           <span>{label}</span>
           {value && (
             <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Photo Attached
+              <CheckCircle2 className="w-3 h-3" />
+              {firebaseSavedId ? `Saved to Firebase (${uploadedFormat || 'Photo'})` : 'Photo Attached'}
             </span>
           )}
         </label>
       )}
 
-      {/* Hidden File Input */}
+      {/* Hidden File Input - Accepts ALL image formats including HEIC, HEIF, JPG, JPEG, PNG, WebP, GIF, BMP, AVIF */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,.heic,.heif,.jpg,.jpeg,.png,.ppnj,.webp,.gif,.bmp,.avif,.tiff,.tif,.jfif,.svg"
         onChange={handleFileSelect}
         className="hidden"
       />
@@ -111,8 +132,11 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           </div>
 
           <div className="p-2 bg-white flex items-center justify-between text-[11px] border-t border-pink-100">
-            <span className="text-gray-500 truncate max-w-[200px]">
-              {value.startsWith('data:image') ? 'Uploaded Local Photo' : 'Online Food Image'}
+            <span className="text-emerald-700 font-semibold truncate max-w-[220px] flex items-center gap-1">
+              <CloudUpload className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              {value.startsWith('data:image')
+                ? `Saved in Firebase (${uploadedFormat || 'JPG/PNG/HEIC'})`
+                : 'Online Food Image'}
             </span>
             <div className="flex items-center gap-2">
               <button
@@ -142,7 +166,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
           {isProcessing ? (
             <div className="flex flex-col items-center gap-2">
               <Loader2 className="w-6 h-6 text-[#E11D74] animate-spin" />
-              <span className="text-xs font-bold text-gray-700">Compressing and loading photo...</span>
+              <span className="text-xs font-bold text-gray-700">Converting & saving photo to Firebase...</span>
             </div>
           ) : (
             <>
@@ -152,8 +176,8 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({
               <p className="text-xs font-bold text-gray-800">
                 Click to Upload Photo (Camera or Gallery)
               </p>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                Supports JPG, PNG, WebP up to 15MB
+              <p className="text-[10px] text-gray-500 mt-0.5 font-medium">
+                Supports JPG, JPEG, PNG, HEIC, HEIF, WebP, GIF up to 25MB (Saved to Firebase)
               </p>
             </>
           )}

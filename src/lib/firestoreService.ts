@@ -55,6 +55,7 @@ const SETTINGS_COLLECTION = 'settings';
 const PROMOS_COLLECTION = 'promos';
 const CATEGORIES_COLLECTION = 'categories';
 const NOTIFICATIONS_COLLECTION = 'notifications';
+const UPLOADED_IMAGES_COLLECTION = 'uploadedImages';
 
 // 1. Initial Seed to Firestore if database is empty
 export async function seedInitialFirestoreData() {
@@ -75,20 +76,57 @@ export async function seedInitialFirestoreData() {
       }
     }
 
-    // Check if restaurants are seeded
-    const restSnap = await getDocs(collection(db, RESTAURANTS_COLLECTION));
-    if (restSnap.empty && INITIAL_RESTAURANTS.length > 0) {
-      console.log('Seeding Dastak restaurants & catalog to Firestore...');
-      for (const r of INITIAL_RESTAURANTS) {
-        await setDoc(doc(db, RESTAURANTS_COLLECTION, r.id), r);
-      }
-      for (const m of INITIAL_MENU_ITEMS) {
-        await setDoc(doc(db, MENU_ITEMS_COLLECTION, m.id), m);
-      }
+    // One-time purge of old fake notifications & demo orders so no fake notifications appear
+    const cleanNotifsFlag = 'dastak_fake_notifs_wiped_v2';
+    if (typeof window !== 'undefined' && !localStorage.getItem(cleanNotifsFlag)) {
+      localStorage.setItem(cleanNotifsFlag, 'true');
+      localStorage.removeItem('dastak_delivery_app_state_v1_omni_notifications');
+      localStorage.removeItem('dastak_delivery_app_state_v1_orders');
+      localStorage.removeItem('dastak_delivery_app_state_v1_device_order_ids');
+      await clearAllNotificationsFromFirestore();
     }
   } catch (err) {
     console.error('Firestore seeding note:', err);
   }
+}
+
+// Clear all notifications from Firestore
+export async function clearAllNotificationsFromFirestore() {
+  try {
+    const notifSnap = await getDocs(collection(db, NOTIFICATIONS_COLLECTION));
+    for (const docSnap of notifSnap.docs) {
+      await deleteDoc(doc(db, NOTIFICATIONS_COLLECTION, docSnap.id));
+    }
+  } catch (err) {
+    console.warn('Error clearing notifications from Firestore:', err);
+  }
+}
+
+// Save uploaded image permanently to Firebase Firestore
+export async function saveImageToFirestore(imageData: {
+  fileName: string;
+  originalFormat: string;
+  dataUrl: string;
+}): Promise<{ id: string; dataUrl: string }> {
+  const imageId = 'img_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  const record = {
+    id: imageId,
+    fileName: imageData.fileName || 'photo.jpg',
+    originalFormat: imageData.originalFormat || 'JPG',
+    mimeType: 'image/jpeg',
+    dataUrl: imageData.dataUrl,
+    sizeBytes: imageData.dataUrl.length,
+    createdAt: new Date().toISOString()
+  };
+
+  try {
+    await setDoc(doc(db, UPLOADED_IMAGES_COLLECTION, imageId), record);
+  } catch (err) {
+    handleFirestoreError(err, OperationType.CREATE, `${UPLOADED_IMAGES_COLLECTION}/${imageId}`);
+    throw err;
+  }
+
+  return { id: imageId, dataUrl: imageData.dataUrl };
 }
 
 // Clear all restaurants and menu items from Firestore for fresh start

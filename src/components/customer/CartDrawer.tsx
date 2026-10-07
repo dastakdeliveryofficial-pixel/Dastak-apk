@@ -57,8 +57,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Direct guest ordering fields (no map pin or email needed)
   const [isGuestMode, setIsGuestMode] = useState(addresses.length === 0);
   const [guestName, setGuestName] = useState(currentUser?.name || '');
-  const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '0300-1234567');
+  const [guestPhone, setGuestPhone] = useState(currentUser?.phone || '');
   const [guestArea, setGuestArea] = useState('Shahi Bazaar');
+  const [customGuestArea, setCustomGuestArea] = useState('');
   const [guestStreetAddress, setGuestStreetAddress] = useState('');
   const [guestLandmark, setGuestLandmark] = useState('');
 
@@ -82,10 +83,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         triggerToast('Phone Required', 'Please provide your WhatsApp phone number for the rider', 'error');
         return null;
       }
+      const finalArea = guestArea === 'CUSTOM_AREA' ? (customGuestArea.trim() || 'Matli') : guestArea;
       return {
         id: 'guest-addr-' + Date.now(),
         label: 'Home' as const,
-        area: guestArea,
+        area: finalArea,
         streetAddress: guestStreetAddress.trim(),
         landmark: guestLandmark.trim() || undefined,
         phone: guestPhone.trim(),
@@ -441,7 +443,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[11px] font-semibold text-gray-700 block mb-0.5">
-                            Matli Area
+                            Matli Area / محلہ
                           </label>
                           <select
                             value={guestArea}
@@ -454,7 +456,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             <option value="Tando Ghulam Ali Road">Tando Ghulam Ali Road</option>
                             <option value="Gulshan-e-Mustafa">Gulshan-e-Mustafa</option>
                             <option value="Civil Hospital Road">Civil Hospital Road</option>
-                            <option value="Other Matli Area">Other Matli Area</option>
+                            <option value="CUSTOM_AREA">✏️ Other / Write Your Own Area</option>
                           </select>
                         </div>
 
@@ -471,6 +473,22 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           />
                         </div>
                       </div>
+
+                      {guestArea === 'CUSTOM_AREA' && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-[#E11D74] block mb-0.5">
+                            Write Your Custom Area / اپنے علاقے کا نام لکھیں *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={customGuestArea}
+                            onChange={(e) => setCustomGuestArea(e.target.value)}
+                            placeholder="e.g. Ward 3, New Housing Society, Matli"
+                            className="w-full text-xs p-2 bg-white border border-[#E11D74] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                          />
+                        </div>
+                      )}
 
                       <div>
                         <label className="text-[11px] font-semibold text-gray-700 block mb-0.5">

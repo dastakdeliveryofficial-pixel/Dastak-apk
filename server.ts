@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
+import sharp from 'sharp';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -14,7 +15,36 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '30mb' }));
+
+  // Universal Image Conversion Endpoint (handles HEIC, HEIF, PNG, JPG, JPEG, WebP, TIFF, AVIF, BMP, GIF)
+  app.post('/api/convert-image', async (req, res) => {
+    try {
+      const { base64Data, maxWidth = 720, maxHeight = 720, quality = 80 } = req.body;
+      if (!base64Data || typeof base64Data !== 'string') {
+        return res.status(400).json({ error: 'base64Data is required' });
+      }
+      const rawBase64 = base64Data.includes(',') ? base64Data.split(',')[1] : base64Data;
+      const inputBuffer = Buffer.from(rawBase64, 'base64');
+
+      const outputBuffer = await sharp(inputBuffer)
+        .rotate() // auto-orient based on EXIF
+        .resize({
+          width: Number(maxWidth) || 720,
+          height: Number(maxHeight) || 720,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .jpeg({ quality: Number(quality) || 80, mozjpeg: true })
+        .toBuffer();
+
+      const dataUrl = `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
+      return res.json({ dataUrl, sizeBytes: outputBuffer.length });
+    } catch (err: any) {
+      console.error('Server image conversion error:', err?.message || err);
+      return res.status(500).json({ error: err?.message || 'Image conversion failed' });
+    }
+  });
 
   let aiClient: GoogleGenAI | null = null;
   function getGeminiClient(): GoogleGenAI | null {
@@ -228,7 +258,10 @@ Respond with a strictly valid JSON object matching this schema:
   // Vite middleware in dev
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

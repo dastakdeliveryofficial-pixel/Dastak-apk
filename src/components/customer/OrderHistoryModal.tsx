@@ -5,7 +5,7 @@ import {
   MapPin, Bike, Search, CheckCircle2, ChevronRight,
   ExternalLink, Phone, Receipt
 } from 'lucide-react';
-import { useApp, normalizePhone } from '../../context/AppContext';
+import { useApp, normalizePhone, isPlaceholderPhone } from '../../context/AppContext';
 import { generateWhatsAppOrderMessage, openWhatsAppChat } from '../../utils/whatsapp';
 import { Order } from '../../types';
 
@@ -41,13 +41,17 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
   const handlePhoneLookup = () => {
     if (!phoneLookup.trim()) return;
     const clean = phoneLookup.trim();
+    if (isPlaceholderPhone(clean)) {
+      triggerToast('Invalid Phone', 'Please enter a valid personal mobile number', 'warning');
+      return;
+    }
     recordCustomerPhone(clean);
     setSearchQuery(clean);
     triggerToast('Phone Linked', `Searching orders for ${clean}`, 'info');
   };
 
-  // Base pool of orders: use all orders if searching or explicitly toggled, otherwise synced customerOrders
-  const basePool = showAllMatliOrders || searchQuery.trim() ? (orders || []) : (customerOrders || []);
+  // Base pool of orders: customer's own orders only, unless admin explicitly toggles full view
+  const basePool = (currentUser?.role === 'admin' && showAllMatliOrders) ? (orders || []) : (customerOrders || []);
 
   const filteredOrders = basePool.filter(order => {
     // Tab filter
@@ -277,7 +281,7 @@ export const OrderHistoryModal: React.FC<OrderHistoryModalProps> = ({
                     Find Orders
                   </button>
                 </div>
-                {orders && orders.length > 0 && (
+                {currentUser?.role === 'admin' && orders && orders.length > 0 && (
                   <div className="pt-2 border-t border-pink-200/60 flex items-center justify-center gap-3 text-xs">
                     <button
                       onClick={() => {

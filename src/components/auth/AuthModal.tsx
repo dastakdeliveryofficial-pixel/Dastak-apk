@@ -40,6 +40,7 @@ export const AuthModal: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerArea, setCustomerArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
+  const [customCustomerArea, setCustomCustomerArea] = useState('');
   const [customerPassword, setCustomerPassword] = useState('');
 
   // Vendor State
@@ -55,6 +56,7 @@ export const AuthModal: React.FC = () => {
   const [shopWhatsApp, setShopWhatsApp] = useState('');
   const [shopAddress, setShopAddress] = useState('');
   const [shopArea, setShopArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
+  const [customShopArea, setCustomShopArea] = useState('');
   const [shopCategory, setShopCategory] = useState('Fast Food');
   const [shopMinOrder, setShopMinOrder] = useState<number>(150);
   const [shopDeliveryTime, setShopDeliveryTime] = useState('20-30 min');
@@ -84,12 +86,13 @@ export const AuthModal: React.FC = () => {
         triggerToast('Missing Fields', 'Please enter your name and phone number', 'warning');
         return;
       }
+      const finalCustArea = customerArea === 'CUSTOM_AREA' ? (customCustomerArea.trim() || 'Matli') : customerArea;
       registerCustomerAccount({
         name: customerName,
         phone: customerPhone,
         email: customerEmail,
         address: customerAddress,
-        area: customerArea,
+        area: finalCustArea,
         password: customerPassword
       });
     } else {
@@ -116,14 +119,15 @@ export const AuthModal: React.FC = () => {
         triggerToast('Incomplete Form', 'Please enter Shop Name, Owner Name, and Contact Number', 'warning');
         return;
       }
+      const finalShopArea = shopArea === 'CUSTOM_AREA' ? (customShopArea.trim() || 'Matli') : shopArea;
       registerNewVendor({
         name: shopName,
         nameUrdu: shopNameUrdu || shopName,
         ownerName: shopOwnerName,
         phone: shopPhone,
         whatsappNumber: shopWhatsApp || shopPhone,
-        address: shopAddress || `${shopArea}, Matli`,
-        area: shopArea,
+        address: shopAddress.trim() || `${finalShopArea}, Matli`,
+        area: finalShopArea,
         categories: [shopCategory],
         minOrder: Number(shopMinOrder),
         deliveryTime: shopDeliveryTime,
@@ -305,7 +309,7 @@ export const AuthModal: React.FC = () => {
 
                   {isCustomerSignUp && (
                     <>
-                      <div>
+                      <div className="space-y-2">
                         <label className="text-xs font-bold text-gray-700 block mb-1">Matli Area / محلہ یا بازار</label>
                         <select
                           value={customerArea}
@@ -315,7 +319,18 @@ export const AuthModal: React.FC = () => {
                           {MATLI_AREAS.map(area => (
                             <option key={area} value={area}>{area}</option>
                           ))}
+                          <option value="CUSTOM_AREA">✏️ Other / Write Your Own Area (اپنا علاقہ خود لکھیں)</option>
                         </select>
+                        {customerArea === 'CUSTOM_AREA' && (
+                          <input
+                            type="text"
+                            value={customCustomerArea}
+                            onChange={(e) => setCustomCustomerArea(e.target.value)}
+                            placeholder="اپنے علاقے یا محلے کا نام لکھیں..."
+                            className="w-full text-xs p-3 bg-white border border-[#E11D74] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                            required
+                          />
+                        )}
                       </div>
 
                       <div>
@@ -535,7 +550,7 @@ export const AuthModal: React.FC = () => {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2.5">
-                      <div>
+                      <div className="space-y-1.5">
                         <label className="text-xs font-bold text-gray-700 block mb-1">Matli Market Area</label>
                         <select
                           value={shopArea}
@@ -545,7 +560,18 @@ export const AuthModal: React.FC = () => {
                           {MATLI_AREAS.map(area => (
                             <option key={area} value={area}>{area}</option>
                           ))}
+                          <option value="CUSTOM_AREA">✏️ Other / Write Custom Area</option>
                         </select>
+                        {shopArea === 'CUSTOM_AREA' && (
+                          <input
+                            type="text"
+                            value={customShopArea}
+                            onChange={(e) => setCustomShopArea(e.target.value)}
+                            placeholder="Write custom area name..."
+                            className="w-full text-xs p-2 bg-white border border-[#E11D74] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                            required
+                          />
+                        )}
                       </div>
                       <div>
                         <label className="text-xs font-bold text-gray-700 block mb-1">Min Order Amount (PKR)</label>

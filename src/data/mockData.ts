@@ -144,11 +144,9 @@ export const BANNER_PROMOS: BannerPromo[] = [
   }
 ];
 
-import { DASTAK_RESTAURANTS, DASTAK_MENU_ITEMS } from './dastakCatalog';
+export const INITIAL_RESTAURANTS: Restaurant[] = [];
 
-export const INITIAL_RESTAURANTS: Restaurant[] = DASTAK_RESTAURANTS;
-
-export const INITIAL_MENU_ITEMS: MenuItem[] = DASTAK_MENU_ITEMS;
+export const INITIAL_MENU_ITEMS: MenuItem[] = [];
 
 export const INITIAL_RIDERS: Rider[] = [];
 

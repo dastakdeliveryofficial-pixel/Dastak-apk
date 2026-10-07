@@ -64,5 +64,10 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read, write: if true;
     }
+
+    // Uploaded Images collection for permanent Firebase image storage
+    match /uploadedImages/{imageId} {
+      allow read, write: if true;
+    }
   }
 }

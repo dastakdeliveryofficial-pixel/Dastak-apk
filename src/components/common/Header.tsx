@@ -55,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [selectedArea, setSelectedArea] = useState('Shahi Bazaar, Matli');
+  const [customHeaderArea, setCustomHeaderArea] = useState('');
 
   // Check active order for current customer
   const activeOrder = activeCustomerOrder || (orders || []).find(
@@ -90,11 +91,39 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
 
               {isLocationMenuOpen && (
-                <div className="absolute top-full left-3 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-pink-100 p-2 z-50">
-                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 py-1">
+                <div className="absolute top-full left-3 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-pink-100 p-2.5 z-50 space-y-2">
+                  {/* Custom Manual Address Input */}
+                  <div className="p-2 bg-pink-50/60 rounded-xl border border-pink-200 space-y-1.5">
+                    <label className="text-[10px] font-bold text-[#E11D74] block">
+                      ✏️ Write Your Own Address / اپنی مرضی کا ایڈریس لکھیں
+                    </label>
+                    <div className="flex gap-1.5">
+                      <input
+                        type="text"
+                        value={customHeaderArea}
+                        onChange={(e) => setCustomHeaderArea(e.target.value)}
+                        placeholder="Type area, colony or street..."
+                        className="flex-1 text-xs px-2.5 py-1.5 bg-white border border-pink-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customHeaderArea.trim()) {
+                            setSelectedArea(customHeaderArea.trim());
+                            setIsLocationMenuOpen(false);
+                          }
+                        }}
+                        className="bg-[#E11D74] text-white text-[11px] font-bold px-2.5 py-1.5 rounded-lg hover:bg-[#C2185B] transition-colors shrink-0"
+                      >
+                        Set
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 pt-1">
                     {t.selectArea}
                   </div>
-                  <div className="max-h-60 overflow-y-auto mt-1 space-y-1">
+                  <div className="max-h-52 overflow-y-auto space-y-1">
                     {MATLI_AREAS.map((area) => (
                       <button
                         key={area}

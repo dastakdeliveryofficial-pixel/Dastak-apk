@@ -96,7 +96,7 @@ export const CustomerNavDrawer: React.FC<CustomerNavDrawerProps> = ({
                   </h4>
                   <p className="text-[11px] text-pink-100 flex items-center gap-1 mt-0.5 truncate">
                     <Phone className="w-3 h-3 shrink-0" />
-                    <span>{currentUser?.phone || '0300-1234567'}</span>
+                    <span>{currentUser?.phone || currentUser?.email || 'Matli, Sindh'}</span>
                   </p>
                 </div>
               </div>

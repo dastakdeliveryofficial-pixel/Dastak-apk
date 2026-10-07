@@ -225,39 +225,8 @@ export const OmniNotificationCenter: React.FC<OmniNotificationCenterProps> = ({
               </div>
               <h4 className="font-bold text-sm text-gray-700">No Notifications Yet</h4>
               <p className="text-xs max-w-xs leading-relaxed text-gray-500">
-                You will receive real-time notifications here for customer orders, vendor shop updates, rider broadcasts, and admin events across Matli — even when logged out!
+                Real-time notifications for live customer orders, shop updates, and delivery dispatches will appear here automatically.
               </p>
-              
-              {/* Quick simulation buttons for testing multi-role notifications */}
-              <div className="pt-2 w-full space-y-1.5">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Test Notifications</p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    onClick={() => triggerTestRoleNotification('vendor')}
-                    className="p-2 rounded-xl text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Store className="w-3.5 h-3.5" /> + Vendor Alert
-                  </button>
-                  <button
-                    onClick={() => triggerTestRoleNotification('rider')}
-                    className="p-2 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <Bike className="w-3.5 h-3.5" /> + Rider Alert
-                  </button>
-                  <button
-                    onClick={() => triggerTestRoleNotification('customer')}
-                    className="p-2 rounded-xl text-xs font-semibold bg-pink-50 text-[#E11D74] border border-pink-200 hover:bg-pink-100 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <User className="w-3.5 h-3.5" /> + Customer Alert
-                  </button>
-                  <button
-                    onClick={() => triggerTestRoleNotification('admin')}
-                    className="p-2 rounded-xl text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200 hover:bg-purple-100 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" /> + Admin Alert
-                  </button>
-                </div>
-              </div>
             </div>
           ) : (
             <AnimatePresence>
@@ -355,14 +324,9 @@ export const OmniNotificationCenter: React.FC<OmniNotificationCenterProps> = ({
             )}
           </div>
 
-          <button
-            onClick={() => triggerTestRoleNotification('vendor')}
-            className="text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-white border border-pink-200 px-2.5 py-1.5 rounded-xl flex items-center gap-1 shadow-2xs"
-            title="Simulate incoming order"
-          >
-            <Sparkles className="w-3 h-3 text-[#E11D74]" />
-            <span>Test Alert</span>
-          </button>
+          <span className="text-[10px] text-gray-400 font-medium">
+            Live Firebase Sync
+          </span>
         </div>
       </motion.div>
     </div>

@@ -47,6 +47,7 @@ export const LoginScreen: React.FC = () => {
   const [regCustomerPhone, setRegCustomerPhone] = useState('');
   const [regCustomerAddress, setRegCustomerAddress] = useState('');
   const [regCustomerArea, setRegCustomerArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
+  const [customRegCustomerArea, setCustomRegCustomerArea] = useState('');
   const [regCustomerPassword, setRegCustomerPassword] = useState('');
 
   // Vendor Registration State
@@ -55,6 +56,8 @@ export const LoginScreen: React.FC = () => {
   const [regShopEmail, setRegShopEmail] = useState('');
   const [regShopPhone, setRegShopPhone] = useState('');
   const [regShopArea, setRegShopArea] = useState(MATLI_AREAS[0] || 'Shahi Bazaar');
+  const [customRegShopArea, setCustomRegShopArea] = useState('');
+  const [regShopAddress, setRegShopAddress] = useState('');
   const [regShopPassword, setRegShopPassword] = useState('');
 
   // Rider Registration State
@@ -102,6 +105,7 @@ export const LoginScreen: React.FC = () => {
           const email = regCustomerEmail.trim() || `${regCustomerPhone.trim().replace(/[^0-9]/g, '')}@dastak.pk`;
           const pass = regCustomerPassword.trim() || password.trim() || 'dastak123';
 
+          const finalCustArea = regCustomerArea === 'CUSTOM_AREA' ? (customRegCustomerArea.trim() || 'Matli') : regCustomerArea;
           await registerWithEmailPassword({
             email,
             pass,
@@ -109,7 +113,7 @@ export const LoginScreen: React.FC = () => {
             phone: regCustomerPhone.trim(),
             role: 'customer',
             address: regCustomerAddress.trim(),
-            area: regCustomerArea
+            area: finalCustArea
           });
         } else if (selectedRole === 'vendor') {
           if (!regShopName.trim() || !regShopPhone.trim() || !regShopOwner.trim()) {
@@ -119,6 +123,7 @@ export const LoginScreen: React.FC = () => {
           }
           const email = regShopEmail.trim() || `vendor_${regShopPhone.trim().replace(/[^0-9]/g, '')}@dastak.pk`;
           const pass = regShopPassword.trim() || password.trim() || 'vendor123';
+          const finalShopArea = regShopArea === 'CUSTOM_AREA' ? (customRegShopArea.trim() || 'Matli') : regShopArea;
 
           await registerWithEmailPassword({
             email,
@@ -126,7 +131,8 @@ export const LoginScreen: React.FC = () => {
             name: regShopOwner.trim(),
             phone: regShopPhone.trim(),
             role: 'vendor',
-            area: regShopArea,
+            address: regShopAddress.trim() || `${finalShopArea}, Matli`,
+            area: finalShopArea,
             shopName: regShopName.trim(),
             shopOwner: regShopOwner.trim()
           });
@@ -518,7 +524,7 @@ export const LoginScreen: React.FC = () => {
                             required
                           />
                         </div>
-                        <div>
+                        <div className="space-y-1.5">
                           <label className="text-xs font-bold text-gray-700 block mb-1">Matli Area</label>
                           <select
                             value={regCustomerArea}
@@ -526,7 +532,18 @@ export const LoginScreen: React.FC = () => {
                             className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
                           >
                             {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                            <option value="CUSTOM_AREA">✏️ Other / Write Custom Area</option>
                           </select>
+                          {regCustomerArea === 'CUSTOM_AREA' && (
+                            <input
+                              type="text"
+                              value={customRegCustomerArea}
+                              onChange={(e) => setCustomRegCustomerArea(e.target.value)}
+                              placeholder="اپنا علاقہ یا محلہ لکھیں..."
+                              className="w-full text-xs p-2.5 bg-white border border-[#E11D74] rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                              required
+                            />
+                          )}
                         </div>
                       </div>
 
@@ -602,7 +619,7 @@ export const LoginScreen: React.FC = () => {
                             required
                           />
                         </div>
-                        <div>
+                        <div className="space-y-1.5">
                           <label className="text-xs font-bold text-gray-700 block mb-1">Matli Market Area</label>
                           <select
                             value={regShopArea}
@@ -610,8 +627,32 @@ export const LoginScreen: React.FC = () => {
                             className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
                           >
                             {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                            <option value="CUSTOM_AREA">✏️ Other / Write Custom Area</option>
                           </select>
+                          {regShopArea === 'CUSTOM_AREA' && (
+                            <input
+                              type="text"
+                              value={customRegShopArea}
+                              onChange={(e) => setCustomRegShopArea(e.target.value)}
+                              placeholder="اپنی دکان کا علاقہ لکھیں..."
+                              className="w-full text-xs p-2.5 bg-white border border-[#E11D74] rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                              required
+                            />
+                          )}
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-gray-700 block mb-1">
+                          Exact Shop / Hotel Address (اپنی مرضی کا مکمل ایڈریس لکھیں)
+                        </label>
+                        <input
+                          type="text"
+                          value={regShopAddress}
+                          onChange={(e) => setRegShopAddress(e.target.value)}
+                          placeholder="e.g. Shop #5, Near Clock Tower, Main Road Matli"
+                          className="w-full text-xs p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#E11D74] outline-none"
+                        />
                       </div>
 
                       <div>

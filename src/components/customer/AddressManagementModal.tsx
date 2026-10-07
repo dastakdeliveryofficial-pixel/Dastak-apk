@@ -20,9 +20,10 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [label, setLabel] = useState<'Home' | 'Shop' | 'Work' | 'Other'>('Home');
   const [area, setArea] = useState<string>(MATLI_AREAS[0]);
+  const [customArea, setCustomArea] = useState<string>('');
   const [streetAddress, setStreetAddress] = useState('');
   const [landmark, setLandmark] = useState('');
-  const [phone, setPhone] = useState(currentUser?.phone || '0300-9876543');
+  const [phone, setPhone] = useState(currentUser?.phone || '');
   const [isDefault, setIsDefault] = useState(true);
 
   if (!isOpen) return null;
@@ -30,10 +31,11 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
   const handleSubmitNew = (e: React.FormEvent) => {
     e.preventDefault();
     if (!streetAddress.trim()) return;
+    const finalArea = area === 'CUSTOM_AREA' ? (customArea.trim() || 'Matli') : area;
 
     addAddress({
       label,
-      area,
+      area: finalArea,
       streetAddress: streetAddress.trim(),
       landmark: landmark.trim() || undefined,
       phone: phone.trim(),
@@ -42,6 +44,7 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
 
     setIsAdding(false);
     setStreetAddress('');
+    setCustomArea('');
     setLandmark('');
   };
 
@@ -190,9 +193,9 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
                 </div>
               </div>
 
-              {/* Area selector */}
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1">Matli Area / Sector</label>
+              {/* Area selector with Custom Area Option */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-gray-700 block mb-1">Matli Area / Sector (یا اپنا علاقہ خود لکھیں)</label>
                 <select
                   value={area}
                   onChange={(e) => setArea(e.target.value)}
@@ -201,7 +204,19 @@ export const AddressManagementModal: React.FC<AddressManagementModalProps> = ({
                   {MATLI_AREAS.map((a) => (
                     <option key={a} value={a}>{a}</option>
                   ))}
+                  <option value="CUSTOM_AREA">✏️ Other / Write Custom Area (اپنی مرضی کا ایڈریس لکھیں)</option>
                 </select>
+
+                {area === 'CUSTOM_AREA' && (
+                  <input
+                    type="text"
+                    required
+                    value={customArea}
+                    onChange={(e) => setCustomArea(e.target.value)}
+                    placeholder="اپنے علاقے یا محلے کا نام لکھیں (e.g. Ward 4, Near Old Bus Stand)"
+                    className="w-full text-xs p-2.5 bg-white border border-[#E11D74] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                  />
+                )}
               </div>
 
               {/* Street Address */}

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Restaurant, MenuItem, Order, OrderStatus } from '../../types';
+import { MATLI_AREAS } from '../../data/mockData';
 import { openWhatsAppChat } from '../../utils/whatsapp';
 import { ITEM_CATEGORY_OPTIONS, getCategoryLabel } from '../../data/categoryCatalog';
 import { ImageUploader } from '../common/ImageUploader';
@@ -992,15 +993,45 @@ export const VendorDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Address in Matli</label>
-                <input
-                  type="text"
-                  value={profileAddress}
-                  onChange={(e) => setProfileAddress(e.target.value)}
-                  placeholder="e.g. Shahi Bazaar, Main Market, Matli"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="font-bold text-gray-700 block mb-1">Matli Area / Sector (اپنی مرضی سے لکھیں یا منتخب کریں)</label>
+                  <select
+                    value={MATLI_AREAS.includes(profileArea) ? profileArea : 'CUSTOM_AREA'}
+                    onChange={(e) => {
+                      if (e.target.value === 'CUSTOM_AREA') {
+                        setProfileArea('');
+                      } else {
+                        setProfileArea(e.target.value);
+                      }
+                    }}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl font-semibold"
+                  >
+                    {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                    <option value="CUSTOM_AREA">✏️ Other / Write Custom Area (اپنی مرضی کا علاقہ لکھیں)</option>
+                  </select>
+                  {!MATLI_AREAS.includes(profileArea) && (
+                    <input
+                      type="text"
+                      required
+                      value={profileArea}
+                      onChange={(e) => setProfileArea(e.target.value)}
+                      placeholder="اپنے علاقے یا بازار کا نام لکھیں..."
+                      className="w-full p-2.5 bg-white border border-[#FF6B00] rounded-xl font-semibold"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="font-bold text-gray-700 block mb-1">Full Custom Address in Matli (مکمل ایڈریس لکھیں)</label>
+                  <input
+                    type="text"
+                    value={profileAddress}
+                    onChange={(e) => setProfileAddress(e.target.value)}
+                    placeholder="e.g. Shop #12, Near Jamia Masjid, Main Road Matli"
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
+                  />
+                </div>
               </div>
 
               <div className="pt-2">
@@ -1102,15 +1133,58 @@ export const VendorDashboard: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="font-bold text-gray-700 block mb-1">Description</label>
-                <textarea
-                  rows={2}
-                  value={itemDescription}
-                  onChange={(e) => setItemDescription(e.target.value)}
-                  placeholder="Fresh basmati rice cooked with spicy Sindhi masala..."
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl"
-                />
+              {/* Shop Address & Area Quick Edit right inside Menu Creation */}
+              <div className="p-3 bg-orange-50/40 rounded-xl border border-orange-200/80 space-y-2">
+                <span className="font-bold text-[11px] text-gray-800 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-[#FF6B00]" />
+                  <span>Shop Location / Address (منتخب کریں یا اپنے حساب سے ایڈریس لکھیں)</span>
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <select
+                      value={MATLI_AREAS.includes(profileArea) ? profileArea : 'CUSTOM_AREA'}
+                      onChange={(e) => {
+                        const val = e.target.value === 'CUSTOM_AREA' ? '' : e.target.value;
+                        setProfileArea(val);
+                        if (val && currentRestaurant) {
+                          updateRestaurantDetails(currentRestaurant.id, { area: val });
+                        }
+                      }}
+                      className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-semibold"
+                    >
+                      {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                      <option value="CUSTOM_AREA">✏️ Other / Write Custom Area</option>
+                    </select>
+                    {!MATLI_AREAS.includes(profileArea) && (
+                      <input
+                        type="text"
+                        value={profileArea}
+                        onChange={(e) => {
+                          setProfileArea(e.target.value);
+                          if (currentRestaurant && e.target.value.trim()) {
+                            updateRestaurantDetails(currentRestaurant.id, { area: e.target.value.trim() });
+                          }
+                        }}
+                        placeholder="اپنا علاقہ خود لکھیں..."
+                        className="w-full p-2 bg-white border border-[#FF6B00] rounded-lg text-xs"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={profileAddress}
+                      onChange={(e) => {
+                        setProfileAddress(e.target.value);
+                        if (currentRestaurant && e.target.value.trim()) {
+                          updateRestaurantDetails(currentRestaurant.id, { address: e.target.value.trim() });
+                        }
+                      }}
+                      placeholder="اپنے حساب سے مکمل ایڈریس لکھیں..."
+                      className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Image Upload Component */}

@@ -4,6 +4,7 @@ import {
   collection, 
   doc, 
   getDoc, 
+  getDocFromServer,
   getDocs, 
   setDoc, 
   addDoc, 
@@ -31,6 +32,18 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || undefined);
+
+// Validate connection to Firestore on boot
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'settings', 'main_config'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+testConnection();
 
 export {
   collection,

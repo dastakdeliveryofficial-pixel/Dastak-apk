@@ -2,6 +2,54 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function() {
+        // 1. Prevent browser extensions (e.g. request interceptors) from throwing
+        // "TypeError: Cannot set property fetch of #<Window> which has only a getter"
+        try {
+          var currentFetch = window.fetch ? window.fetch.bind(window) : undefined;
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch') || Object.getOwnPropertyDescriptor(Window.prototype, 'fetch');
+          if (!desc || desc.configurable !== false) {
+            Object.defineProperty(window, 'fetch', {
+              configurable: true,
+              enumerable: true,
+              get: function() { return currentFetch; },
+              set: function(fn) {
+                if (typeof fn === 'function') {
+                  currentFetch = fn.bind(window);
+                }
+              }
+            });
+          }
+        } catch (e) {}
+
+        // 2. Guard against third-party chrome-extension:// scripts throwing uncaught errors
+        window.addEventListener('error', function(event) {
+          var msg = (event && event.message) ? String(event.message) : '';
+          var file = (event && event.filename) ? String(event.filename) : '';
+          if (
+            file.indexOf('chrome-extension://') !== -1 ||
+            file.indexOf('moz-extension://') !== -1 ||
+            msg.indexOf('Cannot set property fetch of #<Window>') !== -1
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          var reason = event && event.reason ? String(event.reason.stack || event.reason.message || event.reason) : '';
+          if (
+            reason.indexOf('chrome-extension://') !== -1 ||
+            reason.indexOf('Cannot set property fetch of #<Window>') !== -1
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        }, true);
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Dastak Delivery | دستک ڈیلیوری - Matli Food Delivery</title>
     <meta name="description" content="All-in-One Food Delivery Web App for Matli, Sindh, Pakistan. Order Biryani, Fast Food, Karahi, BBQ & Chai instantly." />

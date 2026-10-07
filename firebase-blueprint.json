@@ -81,6 +81,21 @@
         "taxPercentage": { "type": "number" },
         "isPlatformOpen": { "type": "boolean" }
       }
+    },
+    "UploadedImage": {
+      "title": "UploadedImage",
+      "description": "Uploaded image stored in Firebase (supports JPG, JPEG, PNG, HEIC, HEIF, WebP)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fileName": { "type": "string" },
+        "originalFormat": { "type": "string" },
+        "mimeType": { "type": "string" },
+        "dataUrl": { "type": "string" },
+        "sizeBytes": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "dataUrl", "createdAt"]
     }
   },
   "firestore": {
@@ -115,6 +130,10 @@
     "/categories/{categoryId}": {
       "schema": "object",
       "description": "Food and shopping categories"
+    },
+    "/uploadedImages/{imageId}": {
+      "schema": "UploadedImage",
+      "description": "User uploaded restaurant and dish images stored permanently in Firebase"
     }
   }
 }

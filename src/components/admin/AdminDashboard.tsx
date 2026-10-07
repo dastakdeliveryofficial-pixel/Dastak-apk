@@ -66,13 +66,22 @@ export const AdminDashboard: React.FC = () => {
   const [isAddVendorOpen, setIsAddVendorOpen] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
   const [newVendorArea, setNewVendorArea] = useState(MATLI_AREAS[0]);
+  const [customVendorArea, setCustomVendorArea] = useState('');
+  const [newVendorAddress, setNewVendorAddress] = useState('');
   const [newVendorPhone, setNewVendorPhone] = useState('0300-1122334');
-  const [newVendorCommission, setNewVendorCommission] = useState(10);
+  const [newVendorCommission, setNewVendorCommission] = useState(0);
+  const [newVendorImage, setNewVendorImage] = useState('');
 
   // Universal Product Form State
   const [selectedProductRestId, setSelectedProductRestId] = useState<string>('all');
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
-  const [productFormRestId, setProductFormRestId] = useState(restaurants[0]?.id || 'rest-1');
+  const [productFormRestId, setProductFormRestId] = useState(restaurants[0]?.id || '');
+
+  React.useEffect(() => {
+    if (restaurants.length > 0 && (!productFormRestId || !restaurants.some(r => r.id === productFormRestId))) {
+      setProductFormRestId(restaurants[0].id);
+    }
+  }, [restaurants, productFormRestId]);
   const [productFormName, setProductFormName] = useState('');
   const [productFormNameSd, setProductFormNameSd] = useState('');
   const [productFormNameUr, setProductFormNameUr] = useState('');
@@ -196,26 +205,33 @@ export const AdminDashboard: React.FC = () => {
     setNewPromoCode('');
   };
 
-  const handleAddVendorSubmit = (e: React.FormEvent) => {
+  const handleAddVendorSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newVendorName.trim()) {
       triggerToast('Required', 'Please enter Restaurant name', 'warning');
       return;
     }
-    const created = registerNewVendor({
+    const finalArea = newVendorArea === 'CUSTOM_AREA' ? (customVendorArea.trim() || 'Matli') : newVendorArea;
+    const finalAddress = newVendorAddress.trim() || `${finalArea}, Matli`;
+    const created = await registerNewVendor({
       name: newVendorName.trim(),
       ownerName: 'Manager',
       phone: newVendorPhone || '0300-1122334',
       whatsappNumber: newVendorPhone || '0300-1122334',
-      address: `${newVendorArea}, Matli`,
-      area: newVendorArea,
+      address: finalAddress,
+      area: finalArea,
+      image: newVendorImage || undefined,
       categories: ['Fast Food', 'Biryani']
     });
-    if (newVendorCommission && created.restaurantId) {
+    if (newVendorCommission && created?.restaurantId) {
       updateRestaurantDetails(created.restaurantId, { commissionRate: Number(newVendorCommission) });
     }
     setIsAddVendorOpen(false);
     setNewVendorName('');
+    setCustomVendorArea('');
+    setNewVendorAddress('');
+    setNewVendorPhone('');
+    setNewVendorImage('');
   };
 
   const filteredMenuItems = selectedProductRestId === 'all'
@@ -1166,15 +1182,32 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="font-bold text-gray-700 block mb-1">Matli Market Area</label>
+                  <div className="space-y-1.5">
+                    <label className="font-bold text-gray-700 block mb-1">Matli Market Area (یا خود لکھیں)</label>
                     <select
-                      value={editingRestaurant.area}
-                      onChange={(e) => setEditingRestaurant({ ...editingRestaurant, area: e.target.value })}
+                      value={MATLI_AREAS.includes(editingRestaurant.area) ? editingRestaurant.area : 'CUSTOM_AREA'}
+                      onChange={(e) => {
+                        if (e.target.value === 'CUSTOM_AREA') {
+                          setEditingRestaurant({ ...editingRestaurant, area: '' });
+                        } else {
+                          setEditingRestaurant({ ...editingRestaurant, area: e.target.value });
+                        }
+                      }}
                       className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl font-semibold"
                     >
                       {MATLI_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                      <option value="CUSTOM_AREA">✏️ Other / Write Custom Area (اپنی مرضی کا علاقہ لکھیں)</option>
                     </select>
+                    {!MATLI_AREAS.includes(editingRestaurant.area) && (
+                      <input
+                        type="text"
+                        required
+                        value={editingRestaurant.area}
+                        onChange={(e) => setEditingRestaurant({ ...editingRestaurant, area: e.target.value })}
+                        placeholder="اپنی مرضی سے علاقہ یا بازار کا نام لکھیں..."
+                        className="w-full p-2.5 bg-white border border-[#E11D74] rounded-xl font-semibold"
+                      />
+                    )}
                   </div>
 
                   <div>
@@ -1300,8 +1333,8 @@ export const AdminDashboard: React.FC = () => {
                         required
                       />
                     </div>
-                    <div>
-                      <label className="font-bold text-gray-700 block mb-1">Matli Market Area</label>
+                    <div className="space-y-1.5">
+                      <label className="font-bold text-gray-700 block mb-1">Matli Market Area (یا خود لکھیں)</label>
                       <select
                         value={newVendorArea}
                         onChange={(e) => setNewVendorArea(e.target.value)}
@@ -1310,7 +1343,28 @@ export const AdminDashboard: React.FC = () => {
                         {MATLI_AREAS.map(a => (
                           <option key={a} value={a}>{a}</option>
                         ))}
+                        <option value="CUSTOM_AREA">✏️ Other / Write Custom Area</option>
                       </select>
+                      {newVendorArea === 'CUSTOM_AREA' && (
+                        <input
+                          type="text"
+                          required
+                          value={customVendorArea}
+                          onChange={(e) => setCustomVendorArea(e.target.value)}
+                          placeholder="اپنی مرضی کا علاقہ لکھیں..."
+                          className="w-full p-2.5 bg-white border border-[#E11D74] rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                        />
+                      )}
+                    </div>
+                    <div>
+                      <label className="font-bold text-gray-700 block mb-1">Custom Street Address / Landmark</label>
+                      <input
+                        type="text"
+                        value={newVendorAddress}
+                        onChange={(e) => setNewVendorAddress(e.target.value)}
+                        placeholder="اپنے حساب سے مکمل ایڈریس لکھیں (e.g. Near Clock Tower)"
+                        className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
+                      />
                     </div>
                     <div>
                       <label className="font-bold text-gray-700 block mb-1">Phone / WhatsApp</label>
@@ -1322,12 +1376,13 @@ export const AdminDashboard: React.FC = () => {
                         className="w-full p-2.5 bg-pink-50/40 border border-pink-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-[#E11D74]"
                       />
                     </div>
-                    <div>
-                      <label className="font-bold text-gray-700 block mb-1">Commission Policy</label>
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-bold text-emerald-800 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>0% Commission (100% Vendor Payout)</span>
-                      </div>
+                    <div className="sm:col-span-2 lg:col-span-4 p-3 bg-pink-50/30 rounded-2xl border border-pink-100">
+                      <ImageUploader
+                        value={newVendorImage}
+                        onChange={setNewVendorImage}
+                        label="Restaurant / Hotel Photo (JPG, PNG, HEIC, JPEG — Saved to Firebase)"
+                        aspectRatio="wide"
+                      />
                     </div>
                     <div className="sm:col-span-2 lg:col-span-4 flex justify-end gap-2 pt-2">
                       <button

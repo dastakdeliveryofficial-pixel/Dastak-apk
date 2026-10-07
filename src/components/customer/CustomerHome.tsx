@@ -201,11 +201,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
     return (bannerPromos || []).filter(p => p.active !== false);
   }, [bannerPromos]);
 
-  // Synced active order for current customer across all sessions and device history
-  const activeOrder = activeCustomerOrder || orders.find(
-    o => (o.customerId === currentUser?.id || (currentUser?.phone && o.customerPhone === currentUser?.phone)) &&
-         o.status !== 'delivered' && o.status !== 'cancelled'
-  );
+  // Synced active order for current customer strictly from verified customer orders
+  const activeOrder = activeCustomerOrder;
 
   // Filter matching products across ALL restaurants in Matli
   const matchingProducts = useMemo(() => {
@@ -933,8 +930,19 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {filteredRestaurants.map((rest, restIdx) => {
+          {filteredRestaurants.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-pink-100 p-8 text-center shadow-2xs">
+              <Utensils className="w-10 h-10 text-pink-300 mx-auto mb-2" />
+              <h4 className="font-extrabold text-sm sm:text-base text-gray-800">
+                No Restaurants Added Yet (فی الحال کوئی ریسٹورنٹ موجود نہیں)
+              </h4>
+              <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                All previous restaurant records have been deleted. New restaurants and menus added by Admin or Vendors will appear here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {filteredRestaurants.map((rest, restIdx) => {
               const isFav = favorites.includes(rest.id);
               const restName = getRestaurantName(rest);
               const restDesc = getRestaurantDesc(rest);
@@ -1028,7 +1036,8 @@ export const CustomerHome: React.FC<CustomerHomeProps> = ({
                 </div>
               );
             })}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* ANDROID APK DOWNLOAD CARD */}
