@@ -2,9 +2,9 @@ import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 
-const publicDir = path.resolve(process.cwd(), 'public');
-if (!fs.existsSync(publicDir)) {
-  fs.mkdirSync(publicDir, { recursive: true });
+const targetDir = path.resolve(process.cwd(), 'dist');
+if (!fs.existsSync(targetDir)) {
+  fs.mkdirSync(targetDir, { recursive: true });
 }
 
 // Find logo file
@@ -17,23 +17,23 @@ async function generateAll() {
   if (logoPath && fs.existsSync(logoPath)) {
     console.log('Using official logo from:', logoPath);
 
-    // Copy logo to public as dastak-logo.png and dastak-logo.jpg
+    // Copy logo to targetDir as dastak-logo.png and dastak-logo.jpg
     await sharp(logoPath)
       .resize(1024, 1024)
       .png({ quality: 100, compressionLevel: 8 })
-      .toFile(path.join(publicDir, 'dastak-logo.png'));
+      .toFile(path.join(targetDir, 'dastak-logo.png'));
 
     await sharp(logoPath)
       .resize(1024, 1024)
       .jpeg({ quality: 95 })
-      .toFile(path.join(publicDir, 'dastak-logo.jpg'));
+      .toFile(path.join(targetDir, 'dastak-logo.jpg'));
 
     const iconSizes = [48, 72, 96, 128, 144, 152, 180, 192, 256, 384, 512];
     for (const size of iconSizes) {
       await sharp(logoPath)
         .resize(size, size, { fit: 'cover' })
         .png({ quality: 100, compressionLevel: 8 })
-        .toFile(path.join(publicDir, `icon-${size}.png`));
+        .toFile(path.join(targetDir, `icon-${size}.png`));
       console.log(`✓ Generated icon-${size}.png from official logo`);
     }
 
@@ -43,19 +43,19 @@ async function generateAll() {
       await sharp(logoPath)
         .resize(size, size, { fit: 'cover' })
         .png({ quality: 100, compressionLevel: 8 })
-        .toFile(path.join(publicDir, `launchericon-${size}x${size}.png`));
+        .toFile(path.join(targetDir, `launchericon-${size}x${size}.png`));
     }
 
     // Favicon & Apple touch icon
     await sharp(logoPath)
       .resize(48, 48)
       .png()
-      .toFile(path.join(publicDir, 'favicon.png'));
+      .toFile(path.join(targetDir, 'favicon.png'));
 
     await sharp(logoPath)
       .resize(180, 180)
       .png()
-      .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+      .toFile(path.join(targetDir, 'apple-touch-icon.png'));
 
     // Generate valid mobile & desktop screenshots with the official branding banner
     const mobileBg = await sharp({
@@ -75,7 +75,7 @@ async function generateAll() {
     await sharp(mobileBg)
       .composite([{ input: logoBannerMobile, top: 120, left: 60 }])
       .png()
-      .toFile(path.join(publicDir, 'screenshot-mobile.png'));
+      .toFile(path.join(targetDir, 'screenshot-mobile.png'));
 
     const desktopBg = await sharp({
       create: {
@@ -94,7 +94,7 @@ async function generateAll() {
     await sharp(desktopBg)
       .composite([{ input: logoBannerDesktop, top: 110, left: 390 }])
       .png()
-      .toFile(path.join(publicDir, 'screenshot-desktop.png'));
+      .toFile(path.join(targetDir, 'screenshot-desktop.png'));
 
     console.log('🎉 All official Dastak brand icons and screenshots generated successfully!');
   } else {

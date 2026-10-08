@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -11,11 +12,99 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const iconCache = new Map<string, { buffer: Buffer; contentType: string }>();
+
+function getOfficialLogoPath(): string | null {
+  const imgDir = path.resolve(process.cwd(), 'src/assets/images');
+  if (!fs.existsSync(imgDir)) return null;
+  const files = fs.readdirSync(imgDir);
+  const logoFile = files.find((f) => f.startsWith('dastak_official_app_logo'));
+  return logoFile ? path.join(imgDir, logoFile) : null;
+}
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
   app.use(express.json({ limit: '30mb' }));
+
+  // Dynamic PWA Icon & Logo Server (avoids storing 20+ binary PNGs in public/)
+  app.get(
+    [
+      '/dastak-logo.png',
+      '/dastak-logo.jpg',
+      '/favicon.png',
+      '/apple-touch-icon.png',
+      '/icon-:size.png',
+      '/launchericon-:dims.png',
+      '/screenshot-:type.png',
+    ],
+    async (req, res, next) => {
+      try {
+        const reqPath = req.path;
+        if (iconCache.has(reqPath)) {
+          const cached = iconCache.get(reqPath)!;
+          res.setHeader('Content-Type', cached.contentType);
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(cached.buffer);
+        }
+
+        const logoPath = getOfficialLogoPath();
+        if (!logoPath || !fs.existsSync(logoPath)) {
+          return next();
+        }
+
+        let buffer: Buffer | null = null;
+        let contentType = 'image/png';
+
+        if (reqPath === '/dastak-logo.png') {
+          buffer = await sharp(logoPath).resize(512, 512).png({ compressionLevel: 8 }).toBuffer();
+        } else if (reqPath === '/dastak-logo.jpg') {
+          contentType = 'image/jpeg';
+          buffer = await sharp(logoPath).resize(512, 512).jpeg({ quality: 90 }).toBuffer();
+        } else if (reqPath === '/favicon.png') {
+          buffer = await sharp(logoPath).resize(48, 48).png().toBuffer();
+        } else if (reqPath === '/apple-touch-icon.png') {
+          buffer = await sharp(logoPath).resize(180, 180).png().toBuffer();
+        } else if (reqPath.startsWith('/icon-')) {
+          const size = Math.min(1024, Math.max(16, parseInt(req.params.size || '192', 10) || 192));
+          buffer = await sharp(logoPath).resize(size, size, { fit: 'cover' }).png().toBuffer();
+        } else if (reqPath.startsWith('/launchericon-')) {
+          const dims = req.params.dims || '192x192';
+          const size = Math.min(1024, Math.max(16, parseInt(dims.split('x')[0] || '192', 10) || 192));
+          buffer = await sharp(logoPath).resize(size, size, { fit: 'cover' }).png().toBuffer();
+        } else if (reqPath === '/screenshot-mobile.png') {
+          const bg = await sharp({
+            create: { width: 720, height: 1280, channels: 4, background: { r: 255, g: 245, b: 248, alpha: 1 } },
+          }).png().toBuffer();
+          const fg = await sharp(logoPath)
+            .resize(600, 600, { fit: 'contain', background: { r: 225, g: 29, b: 116, alpha: 1 } })
+            .png()
+            .toBuffer();
+          buffer = await sharp(bg).composite([{ input: fg, top: 120, left: 60 }]).png().toBuffer();
+        } else if (reqPath === '/screenshot-desktop.png') {
+          const bg = await sharp({
+            create: { width: 1280, height: 720, channels: 4, background: { r: 255, g: 245, b: 248, alpha: 1 } },
+          }).png().toBuffer();
+          const fg = await sharp(logoPath)
+            .resize(500, 500, { fit: 'contain', background: { r: 225, g: 29, b: 116, alpha: 1 } })
+            .png()
+            .toBuffer();
+          buffer = await sharp(bg).composite([{ input: fg, top: 110, left: 390 }]).png().toBuffer();
+        }
+
+        if (buffer) {
+          iconCache.set(reqPath, { buffer, contentType });
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Cache-Control', 'public, max-age=86400');
+          return res.send(buffer);
+        }
+        return next();
+      } catch {
+        return next();
+      }
+    }
+  );
 
   // Universal Image Conversion Endpoint (handles HEIC, HEIF, PNG, JPG, JPEG, WebP, TIFF, AVIF, BMP, GIF)
   app.post('/api/convert-image', async (req, res) => {
